@@ -2,7 +2,7 @@
  * Output JavaScript for the plugin builder.
  */
 
-import { render } from '@wordpress/element';
+import { createRoot } from '@wordpress/element';
 import App from './App';
 import './style.scss';
 
@@ -13,5 +13,5 @@ document.addEventListener( 'DOMContentLoaded', () => {
 		return;
 	}
 
-	render( <App />, container );
+	createRoot( container ).render( <App /> );
 } );
