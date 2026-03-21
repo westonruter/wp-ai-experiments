@@ -202,7 +202,7 @@ export default function App() {
 	return (
 		<div className="apb-chat">
 			<div className="apb-chat__header">
-				<h2>{ __( 'AI-Powered Plugin Builder', 'ai' ) }</h2>
+				<h2>🤖 { __( 'AI-Powered Plugin Builder', 'ai' ) }</h2>
 				<div className="apb-chat__header-actions">
 					{ messages.length > 0 ? (
 						<button className="apb-chat__reset" onClick={ reset }>
