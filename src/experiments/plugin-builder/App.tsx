@@ -1,10 +1,16 @@
 import { useState, useEffect, useRef } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
+import { marked } from 'marked';
 import { usePluginBuilder, AVAILABLE_TOOLS } from './usePluginBuilder';
 import { runAbility } from '../../utils/run-ability';
 import { AIBrainIcon } from './AIBrainIcon';
 import { getChatHistory, getChatById, deleteChatHistory } from './api';
 import type { ChatHistory } from './types';
+
+marked.setOptions( {
+	breaks: true,
+	gfm: true,
+} );
 
 function Spinner() {
 	return (
@@ -414,16 +420,14 @@ export default function App() {
 									) }
 									<div className="apb-msg__content">
 										{ msg.type === 'text' && (
-											<div className="apb-bubble">
-												<p
-													dangerouslySetInnerHTML={ {
-														__html: msg.content.replace(
-															/\n/g,
-															'<br/>'
-														),
-													} }
-												/>
-											</div>
+											<div
+												className="apb-bubble apb-bubble--markdown"
+												dangerouslySetInnerHTML={ {
+													__html: marked.parse(
+														msg.content
+													) as string,
+												} }
+											/>
 										) }
 										{ msg.type === 'thought' && (
 											<div
@@ -438,12 +442,11 @@ export default function App() {
 												<strong>
 													{ __( 'Thought:', 'ai' ) }
 												</strong>
-												<p
+												<div
 													dangerouslySetInnerHTML={ {
-														__html: msg.content.replace(
-															/\n/g,
-															'<br/>'
-														),
+														__html: marked.parse(
+															msg.content
+														) as string,
 													} }
 												/>
 											</div>
@@ -465,7 +468,13 @@ export default function App() {
 														msg.data.plugin_name
 													) }
 												</strong>
-												<p>{ msg.data.description }</p>
+												<div
+													dangerouslySetInnerHTML={ {
+														__html: marked.parse(
+															msg.data.description
+														) as string,
+													} }
+												/>
 												<ul>
 													{ msg.data.files.map(
 														(
@@ -479,9 +488,13 @@ export default function App() {
 																	}
 																</code>{ ' ' }
 																-{ ' ' }
-																{
-																	file.description
-																}
+																<span
+																	dangerouslySetInnerHTML={ {
+																		__html: marked.parseInline(
+																			file.description
+																		) as string,
+																	} }
+																/>
 															</li>
 														)
 													) }
