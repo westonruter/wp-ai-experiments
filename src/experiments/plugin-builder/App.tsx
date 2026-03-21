@@ -82,6 +82,7 @@ export default function App() {
 	const [ isEnhancing, setIsEnhancing ] = useState( false );
 	const [ enhanceError, setEnhanceError ] = useState< string | null >( null );
 	const [ recentChats, setRecentChats ] = useState< ChatHistory[] >( [] );
+	const [ deleteConfirmId, setDeleteConfirmId ] = useState< number | null >( null );
 	const messagesEndRef = useRef< HTMLDivElement >( null );
 	const textareaRef = useRef< HTMLTextAreaElement >( null );
 
@@ -152,20 +153,25 @@ export default function App() {
 
 	const handleDeleteChat = async ( id: number, e: React.MouseEvent ) => {
 		e.stopPropagation();
-		if (
-			window.confirm(
-				__( 'Are you sure you want to delete this conversation?', 'ai' )
-			)
-		) {
-			try {
-				await deleteChatHistory( id );
-				setRecentChats( ( prevRecentChats ) =>
-					prevRecentChats.filter( ( chat ) => chat.id !== id )
-				);
-			} catch ( err ) {
-				console.error( 'Failed to delete chat', err );
-			}
+		setDeleteConfirmId( id );
+	};
+
+	const confirmDelete = async () => {
+		if ( deleteConfirmId === null ) return;
+
+		try {
+			await deleteChatHistory( deleteConfirmId );
+			setRecentChats( ( prevRecentChats ) =>
+				prevRecentChats.filter( ( chat ) => chat.id !== deleteConfirmId )
+			);
+			setDeleteConfirmId( null );
+		} catch ( err ) {
+			console.error( 'Failed to delete chat', err );
 		}
+	};
+
+	const cancelDelete = () => {
+		setDeleteConfirmId( null );
 	};
 
 	const handleKeyDown = ( e: React.KeyboardEvent< HTMLTextAreaElement > ) => {
@@ -200,8 +206,9 @@ export default function App() {
 	};
 
 	return (
-		<div className="apb-chat">
-			<div className="apb-chat__header">
+		<>
+			<div className="apb-chat">
+				<div className="apb-chat__header">
 				<h2>🤖 { __( 'AI-Powered Plugin Builder', 'ai' ) }</h2>
 				<div className="apb-chat__header-actions">
 					{ messages.length > 0 ? (
@@ -989,5 +996,36 @@ export default function App() {
 				) }
 			</div>
 		</div>
+
+		{ deleteConfirmId !== null && (
+			<div className="apb-delete-modal-overlay">
+				<div className="apb-delete-modal">
+					<h3 className="apb-delete-modal__title">
+						{ __( 'Delete Conversation?', 'ai' ) }
+					</h3>
+					<p className="apb-delete-modal__message">
+						{ __(
+							'This action cannot be undone. Are you sure you want to delete this conversation and all its messages?',
+							'ai'
+						) }
+					</p>
+					<div className="apb-delete-modal__actions">
+						<button
+							className="apb-delete-modal__cancel button"
+							onClick={ cancelDelete }
+						>
+							{ __( 'Cancel', 'ai' ) }
+						</button>
+						<button
+							className="apb-delete-modal__confirm button button-link-delete"
+							onClick={ confirmDelete }
+						>
+							{ __( 'Delete', 'ai' ) }
+						</button>
+					</div>
+				</div>
+			</div>
+		) }
+		</>
 	);
 }
