@@ -206,6 +206,7 @@ export default function App() {
 	};
 
 	return (
+		<>
 		<div className="apb-chat">
 			<div className="apb-chat__header">
 <h2><span aria-hidden='true'>🤖</span> { __( 'AI-Powered Plugin Builder', 'ai' ) }</h2>
