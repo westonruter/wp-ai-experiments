@@ -933,13 +933,14 @@ export default function App() {
 					<button
 						className="apb-chat__send-btn"
 						disabled={
-							isProcessing || isEnhancing || ! input.trim()
+							isEnhancing || ( ! isProcessing && ! input.trim() )
 						}
-						onClick={ handleSend }
-						title={ __( 'Send', 'ai' ) }
+						onClick={ isProcessing ? cancelGeneration : handleSend }
+						title={ isProcessing ? __( 'Stop Generation', 'ai' ) : __( 'Press Enter to send, Shift+Enter for new line', 'ai' ) }
+						style={ isProcessing ? { background: 'transparent', border: 'none' } : {} }
 					>
 						{ isProcessing ? (
-							<Spinner />
+							<span style={ { fontSize: '20px' } }>🛑</span>
 						) : (
 							<span className="dashicons dashicons-arrow-up-alt"></span>
 						) }
@@ -979,16 +980,6 @@ export default function App() {
 							{ __( 'Enhance with AI', 'ai' ) }
 						</span>
 					</button>
-					{ isProcessing && (
-						<button
-							className="apb-chat__stop-btn"
-							onClick={ cancelGeneration }
-							title={ __( 'Stop Generation', 'ai' ) }
-							style={ { marginLeft: '8px' } }
-						>
-							🛑
-						</button>
-					) }
 				</div>
 				{ enhanceError && (
 					<div className="apb-chat__enhance-error">
