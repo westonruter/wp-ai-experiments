@@ -1140,6 +1140,7 @@ export function usePluginBuilder() {
 									installed: true,
 									activated: true,
 									plugin: pluginFile,
+									plugin_name: currentPlan.plugin_name,
 								} )
 							);
 							log(
@@ -1233,6 +1234,7 @@ export function usePluginBuilder() {
 							removeLastLoading();
 							addMessage(
 								createMessage( 'assistant', 'analysis', '', {
+									plugin_name: currentPlan.plugin_name,
 									explanation: analysis.explanation,
 									new_commands: analysis.new_commands || [],
 									suggested_commands:
@@ -1303,6 +1305,7 @@ export function usePluginBuilder() {
 								installed: true,
 								activated: false,
 								plugin: pluginFile,
+								plugin_name: currentPlan.plugin_name,
 								error: msg,
 							} )
 						);

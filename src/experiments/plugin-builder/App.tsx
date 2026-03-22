@@ -690,6 +690,21 @@ export default function App() {
 															} }
 														>
 															{ msg.data
+																.plugin_name && (
+																<li>
+																	<strong>
+																		{ __(
+																			'Plugin name:',
+																			'ai'
+																		) }
+																	</strong>{ ' ' }
+																	{
+																		msg.data
+																			.plugin_name
+																	}
+																</li>
+															) }
+															{ msg.data
 																.explanation
 																.how_it_works && (
 																<li>
