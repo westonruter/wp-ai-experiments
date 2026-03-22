@@ -584,14 +584,6 @@ export function usePluginBuilder() {
 						plan
 					)
 				);
-				addMessage(
-					createMessage(
-						'assistant',
-						'loading',
-						__( 'Preparing generated files...', 'ai' )
-					)
-				);
-
 				// Phase 3: Generator Loop
 				setState( 'coding' );
 				const newFiles: GeneratedFile[] = [];
@@ -632,10 +624,14 @@ export function usePluginBuilder() {
 					! abortRef.current
 				) {
 					turnCount++;
-					updateStep(
-						sprintf(
-							__( 'Agent thinking (Turn %d)...', 'ai' ),
-							turnCount
+					addMessage(
+						createMessage(
+							'assistant',
+							'loading',
+							sprintf(
+								__( 'Agent thinking (Turn %d)...', 'ai' ),
+								turnCount
+							)
 						)
 					);
 
@@ -705,6 +701,7 @@ export function usePluginBuilder() {
 						} );
 
 						const responses: any[] = [];
+						const executedTools: string[] = [];
 
 						for ( const part of toolCalls ) {
 							const call = part.functionCall;
@@ -712,25 +709,16 @@ export function usePluginBuilder() {
 							const args = call.args || {};
 							let res: any = null;
 
+							executedTools.push( fnName );
 							updateStep(
 								sprintf(
-									__( 'Executing tool: %s...', 'ai' ),
+									/* translators: 1: turn number, 2: tool name */
+									__(
+										'Agent thinking (Turn %1$d) — running %2$s…',
+										'ai'
+									),
+									turnCount,
 									fnName
-								)
-							);
-
-							addMessage(
-								createMessage(
-									'assistant',
-									'text',
-									sprintf(
-										/* translators: 1: tool name, 2: JSON arguments */
-										__(
-											'<strong>🛠 Executing tool:</strong> <code>%1$s</code>',
-											'ai'
-										),
-										fnName
-									)
 								)
 							);
 
@@ -940,6 +928,27 @@ export function usePluginBuilder() {
 								},
 							} );
 						}
+
+						removeLastLoading();
+						addMessage(
+							createMessage(
+								'assistant',
+								'text',
+								sprintf(
+									/* translators: 1: turn number, 2: comma-separated list of tool names */
+									__(
+										'<strong>Turn %1$d:</strong> %2$s',
+										'ai'
+									),
+									turnCount,
+									executedTools
+										.map(
+											( t ) => '<code>' + t + '</code>'
+										)
+										.join( ', ' )
+								)
+							)
+						);
 
 						coderPromptBuilder = coderPromptBuilder.withHistory(
 							modelMessage,
