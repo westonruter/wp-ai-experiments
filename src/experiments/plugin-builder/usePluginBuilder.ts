@@ -671,30 +671,29 @@ Do not stop until you have called finish.`;
 					}
 
 					if ( candidate.finishReason === 'tool_calls' ) {
-						// Ensure all parts in the model message have channel set and functionCall has proper structure
 						const modelMessage = {
 							...candidate.message,
 							parts: candidate.message.parts.map( ( p: any ) => {
 								const part: any = {
 									...p,
 									channel: p.channel || 'content',
-parts: candidate.message.parts.map( ( p: any ) => {
-	const part: any = {
-		...p,
-		channel: p.channel || 'content',
-	};
-	if ( part.functionCall ) {
-		const normalized: any = {
-			id: part.functionCall.id,
-			name: part.functionCall.name,
-		};
-		if ( part.functionCall.args != null ) {
-			normalized.args = part.functionCall.args;
-		}
-		part.functionCall = normalized;
-	}
-	return part;
-} ),
+								};
+								if ( part.functionCall ) {
+									const normalized: any = {
+										id: part.functionCall.id,
+										name: part.functionCall.name,
+									};
+									if (
+										part.functionCall.args !== undefined &&
+										part.functionCall.args !== null
+									) {
+										normalized.args =
+											part.functionCall.args;
+									}
+									part.functionCall = normalized;
+								}
+								return part;
+							} ),
 						};
 
 						const toolCalls = modelMessage.parts.filter(
