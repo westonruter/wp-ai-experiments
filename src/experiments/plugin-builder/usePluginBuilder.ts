@@ -678,23 +678,23 @@ Do not stop until you have called finish.`;
 								const part: any = {
 									...p,
 									channel: p.channel || 'content',
-								};
-								if ( part.functionCall ) {
-									const normalized: any = {
-										id: part.functionCall.id,
-										name: part.functionCall.name,
-									};
-									if (
-										part.functionCall.args !== undefined &&
-										part.functionCall.args !== null
-									) {
-										normalized.args =
-											part.functionCall.args;
-									}
-									part.functionCall = normalized;
-								}
-								return part;
-							} ),
+parts: candidate.message.parts.map( ( p: any ) => {
+	const part: any = {
+		...p,
+		channel: p.channel || 'content',
+	};
+	if ( part.functionCall ) {
+		const normalized: any = {
+			id: part.functionCall.id,
+			name: part.functionCall.name,
+		};
+		if ( part.functionCall.args != null ) {
+			normalized.args = part.functionCall.args;
+		}
+		part.functionCall = normalized;
+	}
+	return part;
+} ),
 						};
 
 						const toolCalls = modelMessage.parts.filter(
