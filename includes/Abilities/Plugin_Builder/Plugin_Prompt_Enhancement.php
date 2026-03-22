@@ -97,6 +97,7 @@ class Plugin_Prompt_Enhancement extends Abstract_Ability {
 		return wp_ai_client_prompt( $content )
 			->using_system_instruction( $this->get_system_instruction( 'system-instruction.php' ) )
 			->using_temperature( 0.3 )
+			->using_candidate_count( 1 )
 			->using_model_preference( ...get_preferred_models_for_text_generation() )
 			->generate_text();
 	}
