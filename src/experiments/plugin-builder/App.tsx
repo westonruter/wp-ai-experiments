@@ -89,6 +89,7 @@ export default function App() {
 	const [ enhanceError, setEnhanceError ] = useState< string | null >( null );
 	const [ recentChats, setRecentChats ] = useState< ChatHistory[] >( [] );
 	const [ deleteConfirmId, setDeleteConfirmId ] = useState< number | null >( null );
+	const [ showMobileHistory, setShowMobileHistory ] = useState( false );
 	const messagesEndRef = useRef< HTMLDivElement >( null );
 	const textareaRef = useRef< HTMLTextAreaElement >( null );
 
@@ -213,7 +214,8 @@ export default function App() {
 
 	return (
 		<>
-		<div className="apb-chat">
+		<div style={ { position: 'relative', width: '100%' } }>
+			<div className="apb-chat" style={ { position: 'relative' } }>
 			<div className="apb-chat__header">
 <h2><span aria-hidden='true'>🤖</span> { __( 'AI-Powered Plugin Builder', 'ai' ) }</h2>
 				<div className="apb-chat__header-actions">
@@ -283,10 +285,21 @@ export default function App() {
 				</div>
 			) }
 
-			<div className="apb-chat__messages">
+			<div className="apb-chat__messages" style={ { position: 'relative' } }>
+				{ recentChats && recentChats.length > 0 && (
+					<button
+						onClick={ () => setShowMobileHistory( ! showMobileHistory ) }
+						className={ `history-toggle ${ showMobileHistory ? 'active' : '' }` }
+					>
+						<span className="dashicons dashicons-format-chat"></span>
+						<div className="apb-chat__history-tooltip">
+							{ __( 'Show recent conversations', 'ai' ) }
+						</div>
+					</button>
+				) }
 				{ messages.length === 0 ? (
 					<div className="apb-chat__empty">
-						<AIBrainIcon />
+						{/* <AIBrainIcon /> */}
 						<h3 className="apb-chat__empty-title">
 							{ __( 'Code WordPress Plugins with AI', 'ai' ) }
 						</h3>
@@ -308,90 +321,6 @@ export default function App() {
 								</button>
 							) ) }
 						</div>
-
-						{ recentChats && recentChats.length > 0 && (
-							<div
-								className="apb-chat__history"
-								style={ { marginTop: '40px' } }
-							>
-								<h4
-									className="apb-chat__history-title"
-									style={ {
-										fontSize: '14px',
-										marginBottom: '10px',
-									} }
-								>
-									{ __( 'Recent Conversations', 'ai' ) }
-								</h4>
-								<ul
-									className="apb-chat__history-list"
-									style={ { listStyle: 'none', padding: 0 } }
-								>
-									{ recentChats.map( ( chat ) => (
-										<li
-											key={ chat.id }
-											style={ {
-												marginBottom: '8px',
-												display: 'flex',
-												gap: '8px',
-											} }
-										>
-											<button
-												className="apb-chat__history-btn button button-secondary"
-												onClick={ () =>
-													loadChat( chat )
-												}
-												style={ {
-													flexGrow: 1,
-													textAlign: 'left',
-													display: 'flex',
-													justifyContent:
-														'space-between',
-												} }
-											>
-												<span>
-													{ chat.title ||
-														__(
-															'Plugin Builder Chat',
-															'ai'
-														) }
-												</span>
-												{ chat.plugin_slug && (
-													<span
-														style={ {
-															opacity: 0.6,
-															fontSize: '11px',
-														} }
-													>
-														{ chat.plugin_slug }
-													</span>
-												) }
-											</button>
-											<button
-												className="button button-link-delete"
-												style={ {
-													color: '#d63638',
-													borderColor: 'transparent',
-												} }
-												onClick={ ( e ) =>
-													chat.id !== undefined &&
-													handleDeleteChat(
-														chat.id,
-														e
-													)
-												}
-												title={ __(
-													'Delete conversation',
-													'ai'
-												) }
-											>
-												<span className="dashicons dashicons-trash"></span>
-											</button>
-										</li>
-									) ) }
-								</ul>
-							</div>
-						) }
 					</div>
 				) : (
 					<div className="apb-chat__message-list">
@@ -1068,8 +997,135 @@ export default function App() {
 						{ logs[ logs.length - 1 ].message }
 					</div>
 				) }
+			{ showMobileHistory && recentChats && recentChats.length > 0 && (
+				<div
+					className="apb-chat__popup-overlay"
+					style={ {
+						position: 'absolute',
+						top: '62px',
+						right: '0',
+						left: 'auto',
+						width: '550px',
+						maxHeight: '100vh',
+						backgroundColor: '#fff',
+						boxShadow: '-2px 0 8px rgba(0, 0, 0, 0.15)',
+						zIndex: 1000,
+						display: 'flex',
+						flexDirection: 'column',
+						animation: 'slideInRight 0.3s ease-out',
+					} }
+				>
+					<div
+						style={ {
+							display: 'flex',
+							alignItems: 'center',
+							justifyContent: 'space-between',
+							padding: '16px',
+							borderBottom: '1px solid #e5e7eb',
+						} }
+					>
+						<h4
+							style={ {
+								fontSize: '14px',
+								fontWeight: '600',
+								margin: '0',
+							} }
+						>
+							{ __( 'Recent Conversations', 'ai' ) }
+						</h4>
+						<button
+							onClick={ () => setShowMobileHistory( false ) }
+							style={ {
+								background: 'transparent',
+								border: 'none',
+								color: '#666',
+								cursor: 'pointer',
+								fontSize: '20px',
+								padding: '0',
+								width: '24px',
+								height: '24px',
+								display: 'flex',
+								alignItems: 'center',
+								justifyContent: 'center',
+							} }
+							title={ __( 'Close', 'ai' ) }
+						>
+							✕
+						</button>
+					</div>
+					<ul
+						className="apb-chat__history-list"
+						style={ { listStyle: 'none', padding: '16px', margin: '0', overflow: 'auto', flex: 1 } }
+					>
+						{ recentChats.map( ( chat ) => (
+							<li
+								key={ chat.id }
+								style={ {
+									marginBottom: '8px',
+									display: 'flex',
+									gap: '8px',
+								} }
+							>
+								<button
+									className="apb-chat__history-btn button button-secondary"
+									onClick={ () => {
+										loadChat( chat );
+										setShowMobileHistory( false );
+									} }
+									style={ {
+										flexGrow: 1,
+										textAlign: 'left',
+										display: 'flex',
+										justifyContent: 'space-between',
+									} }
+								>
+									<span>
+										{ chat.title || __( 'Plugin Builder Chat', 'ai' ) }
+									</span>
+									{ chat.plugin_slug && (
+										<span
+											style={ {
+												opacity: 0.6,
+												fontSize: '11px',
+											} }
+										>
+											{ chat.plugin_slug }
+										</span>
+									) }
+								</button>
+								<button
+									className="button button-link-delete"
+									style={ {
+										color: '#d63638',
+										borderColor: 'transparent',
+									} }
+									onClick={ ( e ) =>
+										chat.id !== undefined &&
+										handleDeleteChat( chat.id, e )
+									}
+									title={ __( 'Delete conversation', 'ai' ) }
+								>
+									<span className="dashicons dashicons-trash"></span>
+								</button>
+							</li>
+						) ) }
+					</ul>
+				</div>
+			) }
 			</div>
 		</div>
+		</div>
+
+		<style>{`
+			@keyframes slideInRight {
+				from {
+					transform: translateX(100%);
+				}
+				to {
+					transform: translateX(0);
+				}
+			}
+		`}</style>
 
 		{ deleteConfirmId !== null && (
 			<div className="apb-delete-modal-overlay">
