@@ -1236,6 +1236,7 @@ export function usePluginBuilder() {
 							addMessage(
 								createMessage( 'assistant', 'analysis', '', {
 									plugin_name: currentPlan.plugin_name,
+									plugin_slug: currentPlan.plugin_slug,
 									explanation: analysis.explanation,
 									new_commands: analysis.new_commands || [],
 									suggested_commands:

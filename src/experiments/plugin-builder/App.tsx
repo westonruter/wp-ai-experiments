@@ -705,6 +705,23 @@ export default function App() {
 																</li>
 															) }
 															{ msg.data
+																.plugin_slug && (
+																<li>
+																	<strong>
+																		{ __(
+																			'Directory:',
+																			'ai'
+																		) }
+																	</strong>{ ' ' }
+																	<code>
+																		{
+																			msg.data
+																				.plugin_slug
+																		}
+																	</code>
+																</li>
+															) }
+															{ msg.data
 																.explanation
 																.how_it_works && (
 																<li>
