@@ -1,5 +1,6 @@
 import apiFetch from '@wordpress/api-fetch';
 import { __ } from '@wordpress/i18n';
+import JSZip from 'jszip';
 import { WriteResponse, GeneratedFile, ChatHistory } from './types';
 
 declare global {
@@ -55,6 +56,32 @@ export async function downloadPlugin( pluginFile: string ): Promise< void > {
 	const anchor = document.createElement( 'a' );
 	anchor.href = blobUrl;
 	const pluginSlug = pluginFile.split( '/' )[ 0 ];
+	anchor.download = `${ pluginSlug }.zip`;
+	document.body.appendChild( anchor );
+	anchor.click();
+	document.body.removeChild( anchor );
+	URL.revokeObjectURL( blobUrl );
+}
+
+export async function downloadPluginFromFiles(
+	pluginSlug: string,
+	files: GeneratedFile[]
+): Promise< void > {
+	const zip = new JSZip();
+	const pluginFolder = zip.folder( pluginSlug );
+
+	if ( ! pluginFolder ) {
+		throw new Error( __( 'Failed to create ZIP folder.', 'ai' ) );
+	}
+
+	for ( const file of files ) {
+		pluginFolder.file( file.path, file.content );
+	}
+
+	const blob = await zip.generateAsync( { type: 'blob' } );
+	const blobUrl = URL.createObjectURL( blob );
+	const anchor = document.createElement( 'a' );
+	anchor.href = blobUrl;
 	anchor.download = `${ pluginSlug }.zip`;
 	document.body.appendChild( anchor );
 	anchor.click();

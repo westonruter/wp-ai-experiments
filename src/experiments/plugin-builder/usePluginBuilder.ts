@@ -608,7 +608,7 @@ export function usePluginBuilder() {
 					'You must use the `write_file` tool to write each file.',
 					'In the main plugin file, include the full system instructions as well as the provided plan in a multi-line PHP comment.',
 					'You must use the `list_plugins` tool to verify the planned plugin slug is NOT already taken. If it is taken, pick a new descriptive slug prefixed with `apb-`.',
-'All PHP files must have a unique namespace derived from the plugin slug. The namespace should be in PascalCase, with `APB` as the vendor prefix. For example, a slug `apb-my-plugin` should result in the namespace `APB\\MyPlugin`.',
+					'All PHP files must have a unique namespace derived from the plugin slug. The namespace should be in PascalCase, with `APB` as the vendor prefix. For example, a slug `apb-my-plugin` should result in the namespace `APB\\MyPlugin`.',
 					'When you are completely finished writing all the code, you MUST call the `finish` tool and optionally pass the new slug if it changed.',
 					'IMPORTANT: You MUST NOT call the `finish` tool in the same turn alongside other tools. Call it ALONE in a subsequent turn.',
 					'Do not stop until you have called `finish`.',
@@ -1346,11 +1346,19 @@ export function usePluginBuilder() {
 	}, [ installPlugin ] );
 
 	const downloadPlugin = useCallback( async () => {
-		if ( ! currentPlan || ! installedPluginFile || state !== 'installed' )
-			return;
+		if ( ! currentPlan || ! currentFiles.length ) return;
 
 		try {
-			await api.downloadPlugin( installedPluginFile );
+			// If plugin is installed, download from server
+			if ( installedPluginFile && state === 'installed' ) {
+				await api.downloadPlugin( installedPluginFile );
+			} else {
+				// Otherwise, zip files client-side
+				await api.downloadPluginFromFiles(
+					currentPlan.plugin_slug,
+					currentFiles
+				);
+			}
 			log(
 				'success',
 				__( 'Plugin downloaded', 'ai' ),
@@ -1361,7 +1369,14 @@ export function usePluginBuilder() {
 				e.message || __( 'Failed to download plugin.', 'ai' )
 			);
 		}
-	}, [ currentPlan, installedPluginFile, state, log, handleError ] );
+	}, [
+		currentPlan,
+		currentFiles,
+		installedPluginFile,
+		state,
+		log,
+		handleError,
+	] );
 
 	const reset = useCallback( () => {
 		abortRef.current = false;
