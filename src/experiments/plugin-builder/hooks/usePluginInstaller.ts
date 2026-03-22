@@ -96,7 +96,7 @@ export function usePluginInstaller(
 					let isActivated = false;
 					let activationError = '';
 					try {
-						await api.activatePlugin( finalPluginFile );
+						await api.activatePlugin( currentPlan.plugin_slug );
 						isActivated = true;
 					} catch ( actErr: any ) {
 						activationError =
