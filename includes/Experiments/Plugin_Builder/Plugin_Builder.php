@@ -75,7 +75,6 @@ class Plugin_Builder extends Abstract_Feature {
 				( new WriteController() )->register();
 				( new Rest\ChatHistoryController() )->register();
 				( new Rest\FilesController() )->register();
-				( new DownloadController() )->register();
 			}
 		);
 

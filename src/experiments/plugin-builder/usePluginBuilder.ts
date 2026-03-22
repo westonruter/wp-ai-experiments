@@ -1346,22 +1346,15 @@ export function usePluginBuilder() {
 	}, [ installPlugin ] );
 
 	const downloadPlugin = useCallback( async () => {
-		if ( ! currentPlan || ! installedPluginFile || state !== 'installed' )
-			return;
+		if ( ! currentPlan || ! currentFiles.length ) return;
 
-		try {
-			await api.downloadPlugin( installedPluginFile );
-			log(
-				'success',
-				__( 'Plugin downloaded', 'ai' ),
-				currentPlan.plugin_slug
-			);
-		} catch ( e: any ) {
-			handleError(
-				e.message || __( 'Failed to download plugin.', 'ai' )
-			);
-		}
-	}, [ currentPlan, installedPluginFile, state, log, handleError ] );
+		await api.downloadPlugin( currentPlan.plugin_slug, currentFiles );
+		log(
+			'success',
+			__( 'Plugin downloaded', 'ai' ),
+			currentPlan.plugin_slug
+		);
+	}, [ currentPlan, currentFiles, log ] );
 
 	const reset = useCallback( () => {
 		abortRef.current = false;
