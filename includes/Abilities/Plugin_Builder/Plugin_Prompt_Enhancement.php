@@ -91,6 +91,12 @@ class Plugin_Prompt_Enhancement extends Abstract_Ability {
 		);
 	}
 
+	/**
+	 * Enhances prompt.
+	 *
+	 * @param string $prompt Prompt.
+	 * @return string|WP_Error Enhanced prompt or error.
+	 */
 	protected function enhance_prompt( string $prompt ) {
 		$content = '<user-prompt>' . $prompt . '</user-prompt>';
 
