@@ -44,9 +44,9 @@ export async function downloadPlugin( pluginFile: string ): Promise< void > {
 	} );
 
 	if ( ! response.ok ) {
-		const text = await response.text();
+		const json = await response.json().catch( () => null );
 		throw new Error(
-			text || __( 'Failed to generate ZIP archive.', 'ai' )
+			json?.message || __( 'Failed to generate ZIP archive.', 'ai' )
 		);
 	}
 
