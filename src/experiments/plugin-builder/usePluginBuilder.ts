@@ -607,6 +607,7 @@ export function usePluginBuilder() {
 					'It is HIGHLY recommended to use the `discover_abilities` tool right at the beginning before writing any code to gain additional context and guidance on available WP features.',
 					'You must use the `write_file` tool to write each file.',
 					'You must use the `list_plugins` tool to verify the planned plugin slug is NOT already taken. If it is taken, pick a new descriptive slug prefixed with `apb-`.',
+					'All PHP files must have a unique namespace which is based on the slug.',
 					'When you are completely finished writing all the code, you MUST call the `finish` tool and optionally pass the new slug if it changed.',
 					'IMPORTANT: You MUST NOT call the `finish` tool in the same turn alongside other tools. Call it ALONE in a subsequent turn.',
 					'Do not stop until you have called `finish`.',
