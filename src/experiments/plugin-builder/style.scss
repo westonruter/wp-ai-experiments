@@ -446,6 +446,15 @@
 	border-left-color: var(--success-color);
 	color: var(--text-main);
 	font-weight: 500;
+
+	.dashicons-external {
+		font-size: 14px;
+		width: 14px;
+		height: 14px;
+		margin-left: 2px;
+		vertical-align: text-bottom;
+		text-decoration: none;
+	}
 }
 
 .apb-bubble--warning {
