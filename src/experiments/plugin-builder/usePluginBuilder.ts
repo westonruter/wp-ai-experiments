@@ -606,6 +606,7 @@ export function usePluginBuilder() {
 					'Your goal is to write all the files necessary according to the plan.',
 					'It is HIGHLY recommended to use the `discover_abilities` tool right at the beginning before writing any code to gain additional context and guidance on available WP features.',
 					'You must use the `write_file` tool to write each file.',
+					'In the main plugin file, include the full system instructions as well as the provided plan in a multi-line PHP comment.',
 					'You must use the `list_plugins` tool to verify the planned plugin slug is NOT already taken. If it is taken, pick a new descriptive slug prefixed with `apb-`.',
 'All PHP files must have a unique namespace derived from the plugin slug. The namespace should be in PascalCase, with `APB` as the vendor prefix. For example, a slug `apb-my-plugin` should result in the namespace `APB\\MyPlugin`.',
 					'When you are completely finished writing all the code, you MUST call the `finish` tool and optionally pass the new slug if it changed.',
