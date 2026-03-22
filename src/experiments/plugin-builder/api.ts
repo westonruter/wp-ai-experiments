@@ -74,7 +74,13 @@ export async function downloadPluginFromFiles(
 		throw new Error( __( 'Failed to create ZIP folder.', 'ai' ) );
 	}
 
-	for ( const file of files ) {
+for ( const file of files ) {
+		if ( file.path.includes( '..' ) ) {
+			// This prevents directory traversal attacks (Zip Slip).
+			throw new Error(
+				`File path "${ file.path }" contains ".." and is not allowed.`
+			);
+		}
 		pluginFolder.file( file.path, file.content );
 	}
 
