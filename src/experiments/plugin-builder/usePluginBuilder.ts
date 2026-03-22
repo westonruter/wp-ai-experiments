@@ -671,7 +671,29 @@ Do not stop until you have called finish.`;
 					}
 
 					if ( candidate.finishReason === 'tool_calls' ) {
-						const toolCalls = candidate.message.parts.filter(
+						// Ensure all parts in the model message have channel set and functionCall has proper structure
+						const modelMessage = {
+							...candidate.message,
+							parts: candidate.message.parts.map( ( p: any ) => {
+								const part: any = {
+									...p,
+									channel: p.channel || 'content',
+								};
+								if ( part.functionCall ) {
+									const normalized: any = {
+										id: part.functionCall.id,
+										name: part.functionCall.name,
+									};
+									if ( part.functionCall.args !== undefined && part.functionCall.args !== null ) {
+										normalized.args = part.functionCall.args;
+									}
+									part.functionCall = normalized;
+								}
+								return part;
+							} ),
+						};
+
+						const toolCalls = modelMessage.parts.filter(
 							( p: any ) => p.type === 'function_call'
 						);
 						toolCalls.sort( ( a: any, b: any ) => {
@@ -679,6 +701,7 @@ Do not stop until you have called finish.`;
 							if ( b.functionCall.name === 'finish' ) return -1;
 							return 0;
 						} );
+
 						const responses: any[] = [];
 
 						for ( const part of toolCalls ) {
@@ -919,7 +942,7 @@ Do not stop until you have called finish.`;
 						}
 
 						coderPromptBuilder = coderPromptBuilder.withHistory(
-							candidate.message,
+							modelMessage,
 							{ role: 'user', parts: responses }
 						);
 					} else {
