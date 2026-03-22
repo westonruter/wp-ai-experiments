@@ -218,7 +218,7 @@ export function usePlayground(
 			}
 
 			let htmlContent = '';
-			let imageData = '';
+			const imageData = '';
 
 			try {
 				console.log( 'Testing URL content for:', urlPath );

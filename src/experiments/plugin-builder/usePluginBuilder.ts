@@ -97,7 +97,7 @@ export function usePluginBuilder(
 					if ( client ) {
 						await activatePlugin( client, {
 							pluginName: builderState.currentPlan.plugin_slug,
-							pluginPath: `/wordpress/wp-content/plugins/${ builderState.currentPlan.plugin_slug }/${ builderState.currentPlan.plugin_slug }`,
+							pluginPath: `/wordpress/wp-content/plugins/${ builderState.currentPlan.plugin_slug }`,
 						} );
 					}
 				} catch ( e ) {
@@ -133,9 +133,9 @@ export function usePluginBuilder(
 						}
 
 						// 2. Fallback for newly generated commands that only exist in our local Builder memory trace
-						const analysisMsg = builderState.messages.find(
-							( m: any ) => m.type === 'analysis'
-						);
+						const analysisMsg = [ ...builderState.messages ]
+							.reverse()
+							.find( ( m: any ) => m.type === 'analysis' );
 						if (
 							analysisMsg &&
 							analysisMsg.data &&
@@ -150,9 +150,12 @@ export function usePluginBuilder(
 									'Redirecting Playground iframe to dynamically registered plugin route:',
 									fallbackCmd.url
 								);
-								playground
-									.getClient()
-									?.goTo( '/wp-admin/' + fallbackCmd.url );
+								const targetUrl = fallbackCmd.url.startsWith(
+									'/'
+								)
+									? fallbackCmd.url
+									: '/wp-admin/' + fallbackCmd.url;
+								playground.getClient()?.goTo( targetUrl );
 							}
 						}
 					} catch ( e ) {
@@ -200,7 +203,41 @@ export function usePluginBuilder(
 		isProcessing,
 
 		reset: builderState.reset,
-		loadChat: chatSync.loadChat,
+		loadChat: useCallback(
+			async ( chat: any ) => {
+				chatSync.loadChat( chat );
+				const lastPlan = chat.messages
+					.filter( ( m: any ) => m.type === 'plan' )
+					.pop();
+				const lastFiles = chat.messages
+					.filter( ( m: any ) => m.type === 'files' )
+					.pop();
+
+				if ( lastPlan?.data?.plugin_slug && lastFiles?.data?.length ) {
+					const slug = lastPlan.data.plugin_slug;
+					const files = lastFiles.data;
+
+					try {
+						await playground.bootPlayground();
+						await playground.writePluginFiles( slug, files );
+
+						const client = playground.getClient();
+						if ( client ) {
+							await activatePlugin( client, {
+								pluginName: slug,
+								pluginPath: `/wordpress/wp-content/plugins/${ slug }`,
+							} );
+						}
+					} catch ( e ) {
+						console.error(
+							'Failed to mount historical plugin chat cleanly into Playground:',
+							e
+						);
+					}
+				}
+			},
+			[ chatSync.loadChat, playground ]
+		),
 		cancelGeneration: codeGenerator.cancelGeneration,
 		sendDescription: codeGenerator.sendDescription,
 		installPlugin: pluginInstaller.installPlugin,

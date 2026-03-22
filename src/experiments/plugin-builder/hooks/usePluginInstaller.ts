@@ -182,7 +182,7 @@ export function usePluginInstaller(
 		}
 
 		try {
-			await api.downloadPlugin( currentPlan.plugin_slug );
+			await api.downloadPlugin( currentPlan.plugin_slug, currentFiles );
 		} catch ( e: any ) {
 			addMessage(
 				createMessage(

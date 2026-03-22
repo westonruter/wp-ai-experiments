@@ -65,8 +65,7 @@ export function PluginInstallActions( {
 				onClick={ () => downloadPlugin() }
 				disabled={
 					isProcessing ||
-					state !== 'installed' ||
-					! installedPluginFile
+					( state !== 'installed' && state !== 'ready_to_install' )
 				}
 				style={ {
 					marginLeft: hasActivatedLater ? '0' : '8px',

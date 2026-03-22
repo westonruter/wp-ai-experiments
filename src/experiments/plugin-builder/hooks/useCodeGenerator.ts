@@ -2,7 +2,6 @@ import { useCallback } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
 import { PluginPlan, GeneratedFile } from '../types';
 import * as api from '../api';
-import { Bash, InMemoryFs } from 'just-bash';
 import { select, dispatch } from '@wordpress/data';
 import { store as commandsStore } from '@wordpress/commands';
 import {
@@ -13,6 +12,8 @@ import {
 } from '../prompts';
 import { createMessage } from './useBuilderState';
 import { logAgentTurn, logAgentToolResponse } from '../utils/console-logger';
+// @ts-ignore
+import { activatePlugin } from '@wp-playground/client';
 
 export const AVAILABLE_TOOLS = [
 	{
@@ -54,21 +55,6 @@ export const AVAILABLE_TOOLS = [
 		},
 	},
 	{
-		name: 'run_bash',
-		description:
-			'Runs a bash command inside a virtual Unix environment. Use this to construct skeletons, test build tools, curl resources, or interact with files natively.',
-		parameters: {
-			type: 'object',
-			properties: {
-				command: {
-					type: 'string',
-					description: 'The bash command to run',
-				},
-			},
-			required: [ 'command' ],
-		},
-	},
-	{
 		name: 'run_lint',
 		description:
 			'Runs the WP-CLI plugin check on your generated plugin. Use this to find and fix PHP syntax errors or structural issues before finishing.',
@@ -89,20 +75,7 @@ export const AVAILABLE_TOOLS = [
 			required: [ 'url' ],
 		},
 	},
-	{
-		name: 'read_file',
-		description: 'Reads a previously generated file from the plugin.',
-		parameters: {
-			type: 'object',
-			properties: {
-				path: {
-					type: 'string',
-					description: 'Path to the file relative to the plugin root',
-				},
-			},
-			required: [ 'path' ],
-		},
-	},
+
 	{
 		name: 'list_plugins',
 		description:
@@ -164,16 +137,16 @@ export const AVAILABLE_TOOLS = [
 		},
 	},
 	{
-		name: 'read_playground_file',
+		name: 'read_file',
 		description:
-			'Reads active files directly from the sandboxed WP instance (e.g., viewing standard wp-config.php or active theme templates).',
+			'Reads active files directly from the sandboxed WP environment. Pass an absolute path (e.g., /wordpress/wp-config.php) to explore WordPress core, or a simple relative path (e.g. my-plugin.php) to read the live state of your specific generated plugin code.',
 		parameters: {
 			type: 'object',
 			properties: {
 				path: {
 					type: 'string',
 					description:
-						'Absolute path starting with /wordpress/wp-content/ etc.',
+						'Absolute WP path, or a relative plugin file path to resolve against your current plugin root',
 				},
 			},
 			required: [ 'path' ],
@@ -448,17 +421,12 @@ export function useCodeGenerator(
 
 				setState( 'coding' );
 
-				const sessionFs = new InMemoryFs();
-				const sessionBash = new Bash( {
-					fs: sessionFs,
-					javascript: true,
-					network: { dangerouslyAllowFullInternetAccess: true },
-				} );
+				const playgroundFilesMap = new Map< string, string >();
 
 				const systemPrompt = `You are an expert autonomous WordPress developer. You have been given a plan to build a plugin.
 Your goal is to write all the files necessary according to the plan.
 It is HIGHLY recommended to use the \`discover_abilities\` tool right at the beginning before writing any code to gain additional context and guidance on available WP features.
-You must use the write_file tool to write each file. Alternatively, you can use the run_bash tool to execute unix bash commands. Note that the Bash environment does NOT have \`npm\`. Instead, \`run_bash\` is incredibly powerful for scaffolding nested folders (\`mkdir -p admin/css\`), rapidly creating placeholder files (\`touch file.php\`), fetching external library resources (\`curl -o lib.js https...\`), and managing state natively across the filesystem. 
+You must use the write_file tool to write each file. Alternatively, you can use the \`run_wp_cli\` tool to execute wp-cli logic directly inside the live virtual sandbox (e.g. \`scaffold\`, \`post list\`). You are compiling true WordPress PHP logic directly against a native instance running WP 6.5+.
 You must use the list_plugins tool to verify the planned plugin slug is NOT already taken. If it is taken, pick a new descriptive slug prefixed with \`apb-\`.
 When you are completely finished writing all the code, you MUST call the finish tool and optionally pass the new slug if it changed.
 IMPORTANT: You MUST NOT call the finish tool in the same turn alongside other tools. Call it ALONE in a subsequent turn.
@@ -579,60 +547,57 @@ Do not stop until you have called finish.`;
 										args.name as string,
 										args.input
 									);
-								} else if ( fnName === 'run_bash' ) {
-									const execRes = await sessionBash.exec(
-										args.command as string
-									);
-									res = {
-										stdout: execRes.stdout,
-										stderr: execRes.stderr,
-										exitCode: execRes.exitCode,
-									};
 								} else if ( fnName === 'write_file' ) {
 									const slug =
 										plan?.plugin_slug || 'plugin-builder';
-									let filePath = args.path as string;
-									if ( ! filePath.startsWith( '/' ) ) {
-										filePath = `/home/user/${ slug }/${ filePath }`;
+									let relativePath = args.path as string;
+									if ( relativePath.startsWith( '/' ) ) {
+										relativePath = relativePath.slice( 1 );
 									}
-									// Ensure the nested directory exists first
-									const dirParts = filePath
-										.split( '/' )
-										.slice( 0, -1 );
-									let currentDir = '';
-									for ( const part of dirParts ) {
-										if ( ! part ) {
-											continue;
-										}
-										currentDir += '/' + part;
-										try {
-											await sessionFs.stat( currentDir );
-										} catch {
-											await sessionFs.mkdir( currentDir );
-										}
-									}
-									await sessionFs.writeFile(
-										filePath,
+
+									playgroundFilesMap.set(
+										relativePath,
 										args.content as string
 									);
+
+									await bootPlayground();
+									const client = getPlaygroundClient();
+									if ( client ) {
+										await writePluginFiles(
+											slug,
+											Object.fromEntries(
+												playgroundFilesMap.entries()
+											)
+										);
+									}
+
 									res = { success: true };
 								} else if ( fnName === 'read_file' ) {
-									const slug =
-										plan?.plugin_slug || 'plugin-builder';
-									let filePath = args.path as string;
-									if ( ! filePath.startsWith( '/' ) ) {
-										filePath = `/home/user/${ slug }/${ filePath }`;
+									let targetPath = args.path as string;
+									// Determine if they supplied relative path intended for their generated plugin, or absolute Playground root
+									if (
+										! targetPath.startsWith( '/wordpress/' )
+									) {
+										const slug =
+											plan?.plugin_slug ||
+											'plugin-builder';
+										if ( targetPath.startsWith( '/' ) ) {
+											targetPath = targetPath.slice( 1 );
+										}
+										targetPath = `/wordpress/wp-content/plugins/${ slug }/${ targetPath }`;
 									}
-									try {
-										const content =
-											await sessionFs.readFile(
-												filePath
-											);
-										res = { content };
-									} catch ( e ) {
-										res = {
-											error: 'File not found locally. Ensure you have written it first using write_file.',
-										};
+
+									await bootPlayground();
+									const fileOutput =
+										await readPlaygroundFile( targetPath );
+
+									if (
+										typeof fileOutput === 'object' &&
+										fileOutput.error
+									) {
+										res = fileOutput;
+									} else {
+										res = { content: fileOutput };
 									}
 								} else if ( fnName === 'finish' ) {
 									const finalSlug =
@@ -655,31 +620,19 @@ Do not stop until you have called finish.`;
 										plan?.plugin_slug || 'plugin-builder';
 
 									// We must flush the in-memory files down to WP Playground before linting
-									const currentPaths =
-										sessionFs.getAllPaths();
-									const targetDir = `/home/user/${ slug }/`;
+									// (Already performed continuously during write_file tools mapping)
+									const currentPaths = Array.from(
+										playgroundFilesMap.keys()
+									);
 									const playgroundFiles = [];
 									for ( const p of currentPaths ) {
-										if ( ! p.startsWith( targetDir ) ) {
-											continue;
-										}
-										try {
-											const stat =
-												await sessionFs.stat( p );
-											if ( stat.isDirectory ) {
-												continue;
-											}
-											const content =
-												await sessionFs.readFile( p );
-											playgroundFiles.push( {
-												path: `${ slug }/${ p.replace(
-													targetDir,
-													''
-												) }`,
-												content,
-												type: 'text',
-											} );
-										} catch ( e ) {}
+										playgroundFiles.push( {
+											path: `${ slug }/${ p }`,
+											content:
+												playgroundFilesMap.get( p ) ||
+												'',
+											type: 'text',
+										} );
 									}
 
 									// Ensure the playground is booted
@@ -739,21 +692,6 @@ Do not stop until you have called finish.`;
 										args.command as string
 									);
 									res = { output: cliOutput };
-								} else if (
-									fnName === 'read_playground_file'
-								) {
-									await bootPlayground();
-									const fileOutput = await readPlaygroundFile(
-										args.path as string
-									);
-									if (
-										typeof fileOutput === 'object' &&
-										fileOutput.error
-									) {
-										res = fileOutput;
-									} else {
-										res = { content: fileOutput };
-									}
 								} else if ( fnName === 'list_playground_dir' ) {
 									await bootPlayground();
 									const dirOutput = await listPlaygroundDir(
@@ -772,39 +710,64 @@ Do not stop until you have called finish.`;
 								) {
 									const slug =
 										plan?.plugin_slug || 'plugin-builder';
-									let filePath = args.path as string;
-									if ( ! filePath.startsWith( '/' ) ) {
-										filePath = `/home/user/${ slug }/${ filePath }`;
+									let relativePath = args.path as string;
+									if ( relativePath.startsWith( '/' ) ) {
+										relativePath = relativePath.slice( 1 );
 									}
 									try {
 										const target = args.target as string;
 										const replacement =
 											args.replacement as string;
-										const originalContent =
-											( await sessionFs.readFile(
-												filePath
-											) ) as string;
+
 										if (
-											! originalContent.includes( target )
+											! playgroundFilesMap.has(
+												relativePath
+											)
 										) {
 											res = {
-												error: 'The target text chunk was not found exactly within the file. Ensure you pass the exact characters.',
+												error: 'The file was not found locally in memory. Did you create it first?',
 											};
 										} else {
-											const updatedContent =
-												originalContent.replace(
-													target,
-													replacement
+											const originalContent =
+												playgroundFilesMap.get(
+													relativePath
+												) || '';
+											if (
+												! originalContent.includes(
+													target
+												)
+											) {
+												res = {
+													error: 'The target text chunk was not found exactly within the file. Ensure you pass the exact characters.',
+												};
+											} else {
+												const updatedContent =
+													originalContent.replace(
+														target,
+														replacement
+													);
+												playgroundFilesMap.set(
+													relativePath,
+													updatedContent
 												);
-											await sessionFs.writeFile(
-												filePath,
-												updatedContent
-											);
-											res = {
-												success: true,
-												message:
-													'File chunk replaced successfully.',
-											};
+
+												await bootPlayground();
+												const client =
+													getPlaygroundClient();
+												if ( client ) {
+													await writePluginFiles(
+														slug,
+														Object.fromEntries(
+															playgroundFilesMap.entries()
+														)
+													);
+												}
+												res = {
+													success: true,
+													message:
+														'File chunk replaced successfully.',
+												};
+											}
 										}
 									} catch ( e: any ) {
 										res = {
@@ -871,26 +834,12 @@ Do not stop until you have called finish.`;
 					return;
 				}
 				const newFiles: GeneratedFile[] = [];
-				const paths = sessionFs.getAllPaths();
 				const slug = plan?.plugin_slug || 'plugin-builder';
-				const targetDir = `/home/user/${ slug }/`;
 
-				for ( const p of paths ) {
-					if ( ! p.startsWith( targetDir ) ) {
-						continue;
-					}
-
-					try {
-						const stat = await sessionFs.stat( p );
-						if ( stat.isDirectory ) {
-							continue;
-						}
-					} catch ( e ) {
-						continue;
-					}
-
-					const relPath = p.replace( targetDir, '' );
-
+				for ( const [
+					relPath,
+					content,
+				] of playgroundFilesMap.entries() ) {
 					let fileType = 'text';
 					const planFile = plan?.files?.find(
 						( f: any ) => f.path === relPath
@@ -906,20 +855,11 @@ Do not stop until you have called finish.`;
 							case 'js':
 								fileType = 'javascript';
 								break;
-							case 'ts':
-								fileType = 'typescript';
-								break;
 							case 'css':
 								fileType = 'css';
 								break;
 							case 'json':
 								fileType = 'json';
-								break;
-							case 'md':
-								fileType = 'markdown';
-								break;
-							case 'html':
-								fileType = 'html';
 								break;
 							default:
 								fileType = 'text';
@@ -927,7 +867,6 @@ Do not stop until you have called finish.`;
 						}
 					}
 
-					const content = await sessionFs.readFile( p );
 					newFiles.push( {
 						path: relPath,
 						content,
@@ -936,34 +875,33 @@ Do not stop until you have called finish.`;
 					} );
 				}
 
-				const client = getPlaygroundClient();
-				if ( client ) {
-					const playgroundFiles: Record<
-						string,
-						string | Uint8Array
-					> = {};
-					for ( const file of newFiles ) {
-						playgroundFiles[ file.path ] = file.content;
-					}
-					console.log(
-						'DEBUG: Shipping the following playgroundFiles to writePluginFiles: ',
-						Object.keys( playgroundFiles )
-					);
-					console.log(
-						'DEBUG: RAW sessionFs paths were: ',
-						sessionFs.getAllPaths()
-					);
-					await writePluginFiles(
-						plan?.plugin_slug || 'apb-sandbox',
-						playgroundFiles
-					);
-				}
+				// All files are actively mapped to current plugin sandbox context already via write_file hooks!
+				console.log(
+					'DEBUG: Native Virtual FS tracked routes deployed:',
+					Array.from( playgroundFilesMap.keys() )
+				);
 
 				setCurrentFiles( newFiles );
+
+				updateStep(
+					__( 'Activating generated plugin in Playground…', 'ai' )
+				);
+				try {
+					const client = getPlaygroundClient();
+					if ( client ) {
+						await activatePlugin( client, {
+							pluginName: slug,
+							pluginPath: `/wordpress/wp-content/plugins/${ slug }`,
+						} );
+					}
+				} catch ( e ) {
+					console.error( 'Failed to explicitly activate plugin:', e );
+				}
 
 				setState( 'reviewing' );
 
 				let finalReview = null;
+				let finalFiles = newFiles;
 				try {
 					const { passed, files, reviewSummary } =
 						await evaluateAndFix(
@@ -974,7 +912,8 @@ Do not stop until you have called finish.`;
 							addTokenUsage
 						);
 
-					setCurrentFiles( files );
+					finalFiles = files;
+					setCurrentFiles( finalFiles );
 					setCurrentReview( reviewSummary );
 					finalReview = reviewSummary;
 
@@ -1007,11 +946,11 @@ Do not stop until you have called finish.`;
 						'assistant',
 						'files',
 						__( "Here's the generated code:", 'ai' ),
-						files
+						finalFiles
 					)
 				);
 
-				updateStep( __( 'Analyzing plugin features...', 'ai' ) );
+				updateStep( __( 'Analyzing plugin features…', 'ai' ) );
 				try {
 					const existingCommands = select( commandsStore )
 						.getCommands()
@@ -1021,7 +960,9 @@ Do not stop until you have called finish.`;
 						} ) );
 
 					const analyzerText = await ( window as any ).wp.aiClient
-						.prompt( getAnalyzerPrompt( files, existingCommands ) )
+						.prompt(
+							getAnalyzerPrompt( finalFiles, existingCommands )
+						)
 						.usingSystemInstruction( getSystemPrompt( 'analyzer' ) )
 						.usingTemperature( 0.2 )
 						.usingMaxTokens( 8000 )
@@ -1043,7 +984,9 @@ Do not stop until you have called finish.`;
 									close?: () => void;
 								} ) => {
 									document.location.href = cmd.url;
-									if ( close ) close();
+									if ( close ) {
+										close();
+									}
 								},
 							} );
 						}
