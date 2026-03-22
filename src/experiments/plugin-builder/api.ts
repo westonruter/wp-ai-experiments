@@ -1,4 +1,5 @@
 import apiFetch from '@wordpress/api-fetch';
+import { addQueryArgs } from '@wordpress/url';
 import { __ } from '@wordpress/i18n';
 import JSZip from 'jszip';
 import { WriteResponse, GeneratedFile, ChatHistory } from './types';
@@ -63,14 +64,60 @@ export async function downloadPlugin(
 	URL.revokeObjectURL( blobUrl );
 }
 
+let cachedAbilities: Record< string, any > | null = null;
+
+async function getAbilityMeta( name: string ): Promise< any > {
+	if ( ! cachedAbilities ) {
+		const list: any[] = await apiFetch( {
+			path: addQueryArgs( '/wp-abilities/v1/abilities', {
+				per_page: -1,
+				context: 'edit',
+			} ),
+		} );
+		cachedAbilities = {};
+		for ( const ability of list ) {
+			cachedAbilities[ ability.name ] = ability;
+		}
+	}
+	return cachedAbilities[ name ] ?? null;
+}
+
+function getMethodForAbility( ability: any ): 'GET' | 'POST' | 'DELETE' {
+	const annotations = ability?.meta?.annotations;
+	if ( annotations?.readonly ) {
+		return 'GET';
+	}
+	if ( annotations?.destructive && annotations?.idempotent ) {
+		return 'DELETE';
+	}
+	return 'POST';
+}
+
 export async function executeAbility(
 	name: string,
 	input: any
 ): Promise< any > {
+	const ability = await getAbilityMeta( name );
+	const method = getMethodForAbility( ability );
+	const normalizedInput = input ?? null;
+
+	if ( method === 'GET' || method === 'DELETE' ) {
+		return apiFetch( {
+			path:
+				normalizedInput === null
+					? `/wp-abilities/v1/abilities/${ name }/run`
+					: addQueryArgs(
+							`/wp-abilities/v1/abilities/${ name }/run`,
+							{ input: normalizedInput }
+					  ),
+			method,
+		} );
+	}
+
 	return apiFetch( {
 		path: `/wp-abilities/v1/abilities/${ name }/run`,
 		method: 'POST',
-		data: { input },
+		data: { input: normalizedInput },
 	} );
 }
 
