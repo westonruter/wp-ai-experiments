@@ -268,8 +268,26 @@ if ( ! defined( 'ABSPATH' ) ) {
 ## Security Requirements (MANDATORY — from WordPress Agent Skills)
 - NEVER use \`$_GET\`, \`$_POST\`, \`$_REQUEST\` without sanitization. Read explicit keys only, never process the entire array.
 - Use \`wp_unslash()\` before sanitizing when reading from superglobals.
-- Use \`sanitize_text_field()\`, \`sanitize_email()\`, \`absint()\`, \`wp_kses_post()\` for input validation.
-- Use \`esc_html()\`, \`esc_attr()\`, \`esc_url()\`, \`wp_kses_post()\` for output escaping. Golden rule: sanitize on input, escape on output.
+- **Input Sanitization** — Choose the appropriate function:
+  - \`sanitize_text_field()\` for single-line text inputs
+  - \`sanitize_textarea_field()\` for multi-line text
+  - \`sanitize_email()\` for email addresses
+  - \`sanitize_url()\` or \`esc_url_raw()\` for URLs
+  - \`sanitize_key()\` for option/meta keys
+  - \`sanitize_file_name()\` for file names
+  - \`sanitize_hex_color()\` for color values
+  - \`absint()\` for positive integers
+  - \`intval()\` or \`floatval()\` for numbers
+  - \`wp_kses_post()\` for rich text (allows safe HTML)
+  - \`wp_validate_boolean()\` for boolean values
+- **Output Escaping** — Choose the appropriate function:
+  - \`esc_html()\` for HTML content
+  - \`esc_attr()\` for HTML attributes
+  - \`esc_url()\` for URLs in HTML
+  - \`esc_js()\` for JavaScript strings
+  - \`esc_textarea()\` for textarea content
+  - \`wp_kses_post()\` for rich content that needs safe HTML
+- **Golden rule**: Sanitize on input, escape on output.
 - Use \`wp_verify_nonce()\` on ALL form submissions and AJAX handlers. Nonces prevent CSRF but are NOT authorization — always pair with capability checks.
 - Use \`current_user_can()\` for capability checks on ALL privileged operations.
 - Use \`$wpdb->prepare()\` for ALL database queries with variables. Never concatenate or interpolate user input into SQL strings.
