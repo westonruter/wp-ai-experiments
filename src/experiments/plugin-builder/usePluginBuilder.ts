@@ -87,11 +87,6 @@ export const AVAILABLE_TOOLS = [
 		},
 	},
 	{
-		name: 'list_plugins',
-		description:
-			'Lists all currently installed WordPress plugins. Use this to check for slug conflicts.',
-	},
-	{
 		name: 'finish',
 		description:
 			'Call this function ONLY when you have finished writing all files for the plugin.',
@@ -607,8 +602,8 @@ export function usePluginBuilder() {
 					'It is HIGHLY recommended to use the `discover_abilities` tool right at the beginning before writing any code to gain additional context and guidance on available WP features.',
 					'You must use the `write_file` tool to write each file.',
 					'In the main plugin file, include the full system instructions as well as the provided plan in a multi-line PHP comment.',
-					'You must use the `list_plugins` tool to verify the planned plugin slug is NOT already taken. If it is taken, pick a new descriptive slug prefixed with `apb-`.',
-'All PHP files must have a unique namespace derived from the plugin slug. The namespace should be in PascalCase, with `APB` as the vendor prefix. For example, a slug `apb-my-plugin` should result in the namespace `APB\\MyPlugin`.',
+					'You must use the execute_ability tool with the name `ai/get-installed-plugins` to verify the planned plugin slug is NOT already taken. If it is taken, pick a new descriptive slug prefixed with `apb-`.',
+					'All PHP files must have a unique namespace derived from the plugin slug. The namespace should be in PascalCase, with `APB` as the vendor prefix. For example, a slug `apb-my-plugin` should result in the namespace `APB\\MyPlugin`.',
 					'When you are completely finished writing all the code, you MUST call the `finish` tool and optionally pass the new slug if it changed.',
 					'IMPORTANT: You MUST NOT call the `finish` tool in the same turn alongside other tools. Call it ALONE in a subsequent turn.',
 					'Do not stop until you have called `finish`.',
@@ -740,9 +735,7 @@ export function usePluginBuilder() {
 							);
 
 							try {
-								if ( fnName === 'list_plugins' ) {
-									res = await api.listPlugins();
-								} else if ( fnName === 'discover_abilities' ) {
+								if ( fnName === 'discover_abilities' ) {
 									res = await api.discoverAbilities();
 								} else if ( fnName === 'execute_ability' ) {
 									res = await api.executeAbility(
