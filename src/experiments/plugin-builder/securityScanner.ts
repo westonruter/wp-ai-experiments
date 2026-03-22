@@ -46,10 +46,7 @@ const SAFE_FUNCTIONS = [
 ];
 
 // Build regex pattern for $_GET and $_POST that checks for safe functions
-const safeFunctionsPattern = SAFE_FUNCTIONS.join( '|' ).replace(
-	/\$/g,
-	'\\$'
-);
+const safeFunctionsPattern = SAFE_FUNCTIONS.join( '|' ).replace( /\$/g, '\\$' );
 
 // Dangerous patterns for rudimentary security scan
 const DANGEROUS_PATTERNS = [
@@ -63,14 +60,8 @@ const DANGEROUS_PATTERNS = [
 	/\bfile_put_contents\s*\(\s*\$_(GET|POST|REQUEST)/i,
 	/\b(unlink|rmdir)\s*\(\s*\$_(GET|POST|REQUEST)/i,
 	/\bbase64_decode\s*\(\s*\$_(GET|POST|REQUEST)/i,
-	new RegExp(
-		`\\$_GET\\b(?!.*\\b(${ safeFunctionsPattern })\\b)`,
-		'i'
-	),
-	new RegExp(
-		`\\$_POST\\b(?!.*\\b(${ safeFunctionsPattern })\\b)`,
-		'i'
-	),
+	new RegExp( `\\$_GET\\b(?!.*\\b(${ safeFunctionsPattern })\\b)`, 'i' ),
+	new RegExp( `\\$_POST\\b(?!.*\\b(${ safeFunctionsPattern })\\b)`, 'i' ),
 ];
 
 export function scanFiles( files: PluginFile[] ): {
