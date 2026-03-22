@@ -16,7 +16,7 @@ use WordPress\AI\Abstracts\Abstract_Ability;
 
 // Exit if accessed directly.
 if ( ! defined( 'ABSPATH' ) ) {
-	return;
+	exit;
 }
 
 class Get_Installed_Plugins extends Abstract_Ability {
@@ -143,19 +143,19 @@ class Get_Installed_Plugins extends Abstract_Ability {
 			$plugin_info = array(
 				'plugin'       => $plugin_file,
 				'status'       => is_plugin_active( $plugin_file ) ? 'active' : 'inactive',
-				'name'         => $plugin_data['Name'],
-				'plugin_uri'   => $plugin_data['PluginURI'],
-				'author'       => $plugin_data['Author'],
-				'author_uri'   => $plugin_data['AuthorURI'],
-				'description'  => $plugin_data['Description'],
-				'version'      => $plugin_data['Version'],
-				'network_only' => $plugin_data['Network'],
-				'requires_wp'  => $plugin_data['RequiresWP'],
-				'requires_php' => $plugin_data['RequiresPHP'],
-				'textdomain'   => $plugin_data['TextDomain'],
+				'name'         => $plugin_data['Name'] ?? '',
+				'plugin_uri'   => $plugin_data['PluginURI'] ?? '',
+				'author'       => $plugin_data['Author'] ?? '',
+				'author_uri'   => $plugin_data['AuthorURI'] ?? '',
+				'description'  => $plugin_data['Description'] ?? '',
+				'version'      => $plugin_data['Version'] ?? '',
+				'network_only' => $plugin_data['Network'] ?? '',
+				'requires_wp'  => $plugin_data['RequiresWP'] ?? '',
+				'requires_php' => $plugin_data['RequiresPHP'] ?? '',
+				'textdomain'   => $plugin_data['TextDomain'] ?? '',
 			);
 
-			$result[ $plugin_file ] = array_intersect_key( $plugin_info, array_flip( $requested_fields ) );
+			$result[] = array_intersect_key( $plugin_info, array_flip( $requested_fields ) );
 		}
 
 		return $result;
