@@ -168,7 +168,7 @@ class Get_Installed_Plugins extends Abstract_Ability {
 	 * @return bool True if the user has permission to execute the ability, false otherwise.
 	 */
 	protected function permission_callback( $input = array() ): bool {
-		return current_user_can( 'activate_plugins' );
+		return current_user_can( 'install_plugins' );
 	}
 
 	/**
