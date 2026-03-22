@@ -690,6 +690,21 @@ export default function App() {
 															} }
 														>
 															{ msg.data
+																.plugin_name && (
+																<li>
+																	<strong>
+																		{ __(
+																			'Plugin name:',
+																			'ai'
+																		) }
+																	</strong>{ ' ' }
+																	{
+																		msg.data
+																			.plugin_name
+																	}
+																</li>
+															) }
+															{ msg.data
 																.explanation
 																.how_it_works && (
 																<li>
@@ -908,11 +923,9 @@ export default function App() {
 					{ tokenUsage && tokenUsage.total_tokens > 0 && (
 						<div>
 							<strong>{ __( 'Tokens Used:', 'ai' ) }</strong>{ ' ' }
-							{ tokenUsage.total_tokens } (
-							{ tokenUsage.total_input_tokens }{ ' ' }
-							{ __( 'in', 'ai' ) },{ ' ' }
-							{ tokenUsage.total_output_tokens }{ ' ' }
-							{ __( 'out', 'ai' ) })
+							{ tokenUsage.total_tokens.toLocaleString() } (
+							{ tokenUsage.total_input_tokens.toLocaleString() }↑{ ' ' }
+							{ tokenUsage.total_output_tokens.toLocaleString() }↓)
 						</div>
 					) }
 				</div>
