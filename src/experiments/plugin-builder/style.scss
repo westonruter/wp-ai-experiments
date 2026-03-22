@@ -602,7 +602,7 @@
 	font-size: 15px;
 }
 
-.apb-chat__send-btn:hover:not(:disabled) {
+.apb-chat__send-btn:not(.apb-chat__send-btn--stop)hover:not(:disabled) {
 	background: var(--primary-hover);
 	transform: scale(1.05);
 	box-shadow: 0 4px 12px rgba(56, 88, 233, 0.4);
@@ -630,8 +630,52 @@
 	}
 }
 
+.apb-chat__stop-icon-text {
+  width: 10px;
+  height: 10px;
+  background-color: #ff0000;
+  border-radius: 50%;
+  position: relative;
+  display: inline-block;
+}
+
+/* small spark highlight */
+.apb-chat__stop-icon-text::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 4px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 50%;
+}
+
 .apb-chat__stop-icon {
-	font-size: 20px;
+  width: 14px;
+  height: 14px;
+  background-color: #ff0000;
+  border-radius: 50%;
+  position: relative;
+  display: inline-block;
+}
+
+.apb-chat__stop-icon:hover:not(:disabled) {
+	background: #fc3232;
+	transform: scale(1.05);
+}
+
+
+/* small spark highlight */
+.apb-chat__stop-icon::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 4px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 50%;
 }
 
 .apb-chat__enhance-error {
@@ -744,6 +788,44 @@
 }
 
 .apb-chat__prompt-tip-icon:hover .apb-chat__prompt-tip-tooltip {
+	opacity: 1;
+	visibility: visible;
+}
+
+.apb-chat__send-tooltip {
+	position: absolute;
+	bottom: calc(100% + 8px);
+	left: 50%;
+	transform: translateX(-50%);
+	width: 280px;
+	padding: 10px 12px;
+	font-size: 12px;
+	line-height: 1.5;
+	color: #fff;
+	background: #1f2937;
+	backdrop-filter: blur(8px);
+	border-radius: 6px;
+	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(0, 0, 0, 0.8);
+	opacity: 0;
+	visibility: hidden;
+	transition: opacity 0.2s ease, visibility 0.2s ease;
+	pointer-events: none;
+	z-index: 10000;
+	text-align: center;
+}
+
+.apb-chat__send-tooltip::after {
+	content: '';
+	position: absolute;
+	top: 100%;
+	left: 50%;
+	transform: translateX(-50%);
+	border: 6px solid transparent;
+	border-top-color: #1f2937;
+	filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+}
+
+.apb-chat__send-btn:hover .apb-chat__send-tooltip {
 	opacity: 1;
 	visibility: visible;
 }

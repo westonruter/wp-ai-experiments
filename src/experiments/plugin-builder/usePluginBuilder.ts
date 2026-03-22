@@ -350,7 +350,7 @@ export function usePluginBuilder() {
 				createMessage(
 					'assistant',
 					'text',
-					__( '🛑 Generation stopped by user.', 'ai' )
+					__( '<span class="apb-chat__stop-icon-text"></span>  Generation stopped by user.', 'ai' )
 				)
 			);
 		},

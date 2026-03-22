@@ -1005,13 +1005,15 @@ export default function App() {
 							isEnhancing || ( ! isProcessing && ! input.trim() )
 						}
 						onClick={ isProcessing ? cancelGeneration : handleSend }
-						title={ isProcessing ? __( 'Stop Generation', 'ai' ) : __( 'Press Enter to send, Shift+Enter for new line', 'ai' ) }
 					>
 						{ isProcessing ? (
-							<span className="apb-chat__stop-icon">🛑</span>
+							<span className="apb-chat__stop-icon"></span>
 						) : (
 							<span className="dashicons dashicons-arrow-up-alt"></span>
 						) }
+						<div className="apb-chat__send-tooltip">
+							{ isProcessing ? __( 'Stop Generation', 'ai' ) : __( 'Press Enter to send, Shift+Enter for new line', 'ai' ) }
+						</div>
 					</button>
 					<button
 						className="apb-chat__prompt-tip-icon"
