@@ -1061,7 +1061,7 @@ export function usePluginBuilder() {
 	);
 
 	const installPlugin = useCallback(
-		async ( force: boolean = false ) => {
+		async ( force: boolean = false, activate: boolean = true ) => {
 			if ( ! currentPlan || ! currentFiles.length ) return;
 
 			const isUpdate = messagesRef.current.some(
@@ -1077,7 +1077,9 @@ export function usePluginBuilder() {
 					'loading',
 					isUpdate
 						? __( 'Updating plugin files...', 'ai' )
-						: __( 'Saving and activating plugin...', 'ai' )
+						: activate
+							? __( 'Saving and activating plugin...', 'ai' )
+							: __( 'Saving plugin...', 'ai' )
 				)
 			);
 			log(
@@ -1132,21 +1134,25 @@ export function usePluginBuilder() {
 
 					try {
 						if ( ! isUpdate ) {
-							updateStep( __( 'Activating plugin...', 'ai' ) );
-							await api.activatePlugin( pluginFile );
+							if ( activate ) {
+								updateStep( __( 'Activating plugin...', 'ai' ) );
+								await api.activatePlugin( pluginFile );
+							}
 							removeLastLoading();
 							setState( 'installed' );
 							addMessage(
 								createMessage( 'assistant', 'install', '', {
 									installed: true,
-									activated: true,
+									activated: activate,
 									plugin: pluginFile,
 									plugin_name: currentPlan.plugin_name,
 								} )
 							);
 							log(
 								'success',
-								'Plugin installed & activated',
+								activate
+									? 'Plugin installed & activated'
+									: 'Plugin installed',
 								pluginFile
 							);
 						} else {

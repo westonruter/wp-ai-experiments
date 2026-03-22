@@ -571,6 +571,27 @@ export default function App() {
 													) }
 													<button
 														className="button button-secondary"
+														disabled={
+															isProcessing ||
+															state ===
+																'installing' ||
+															state ===
+																'installed'
+														}
+														onClick={ () =>
+															installPlugin(
+																true,
+																false
+															)
+														}
+													>
+														{ __(
+															'Install Plugin',
+															'ai'
+														) }
+													</button>
+													<button
+														className="button button-secondary"
 														onClick={ () =>
 															downloadPlugin()
 														}
@@ -621,14 +642,19 @@ export default function App() {
 															'Plugin installed and activated successfully!',
 															'ai'
 													  )
-													: sprintf(
-															/* translators: %s: error message */
-															__(
-																'Installed, but activation failed: %s',
+													: msg.data.error
+														? sprintf(
+																/* translators: %s: error message */
+																__(
+																	'Installed, but activation failed: %s',
+																	'ai'
+																),
+																msg.data.error
+														  )
+														: __(
+																'Plugin installed successfully!',
 																'ai'
-															),
-															msg.data.error
-													  ) }
+														  ) }
 											</div>
 										) }
 										{ msg.type === 'error' && (
