@@ -10,6 +10,7 @@ declare( strict_types=1 );
 namespace WordPress\AI\Experiments\Plugin_Builder\Installer;
 
 use WP_Error;
+use WordPress\AI\Experiments\Plugin_Builder\Plugin_Builder;
 
 /**
  * Writes generated plugin files to wp-content/plugins using WP_Filesystem.
@@ -97,6 +98,19 @@ class PluginWriter {
 
 		if ( empty( $main_file ) ) {
 			return new WP_Error( 'no_main_file', 'Could not determine the main plugin file.' );
+		}
+
+		// Ensure the main plugin file has the AI Plugin Built header.
+		$main_full_path = trailingslashit( $plugins_dir ) . $main_file;
+		$main_content   = $filesystem->get_contents( $main_full_path );
+		if ( is_string( $main_content ) && ! str_contains( $main_content, Plugin_Builder::AI_PLUGIN_HEADER ) ) {
+			$main_content = preg_replace(
+				'/^(\s*\*\s*Plugin Name:.*)$/m',
+				'$1' . "\n" . ' * ' . Plugin_Builder::AI_PLUGIN_HEADER . ': true',
+				$main_content,
+				1
+			);
+			$filesystem->put_contents( $main_full_path, $main_content, FS_CHMOD_FILE );
 		}
 
 		return array( 'main_file' => $main_file );
