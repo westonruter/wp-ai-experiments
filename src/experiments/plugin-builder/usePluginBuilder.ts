@@ -646,7 +646,7 @@ export function usePluginBuilder() {
 					'',
 					'=== INTERNATIONALISATION ===',
 					'All user-facing strings must be in English and wrapped in the appropriate i18n function: `__()`, `_e()`, `_n()`, `esc_html__()`, etc., using the plugin text domain.',
-					'Load the text domain via `load_plugin_textdomain()` on the `init` hook.',
+					'Add a `Domain Path: languages/` plugin header to ensure automatic translation loading.',
 					'Include a `.pot` file (and optionally starter `.po`/`.mo` files) under a `languages/` directory.',
 					'',
 					'=== CODE QUALITY ===',
