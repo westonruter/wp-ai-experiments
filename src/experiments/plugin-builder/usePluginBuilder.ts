@@ -937,14 +937,12 @@ export function usePluginBuilder() {
 								sprintf(
 									/* translators: 1: turn number, 2: comma-separated list of tool names */
 									__(
-										'<strong>Turn %1$d:</strong> %2$s',
+										'**Turn %1$d:** %2$s',
 										'ai'
 									),
 									turnCount,
 									executedTools
-										.map(
-											( t ) => '<code>' + t + '</code>'
-										)
+										.map( ( t ) => '`' + t + '`' )
 										.join( ', ' )
 								)
 							)
