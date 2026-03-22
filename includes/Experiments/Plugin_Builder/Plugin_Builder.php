@@ -11,6 +11,8 @@ namespace WordPress\AI\Experiments\Plugin_Builder;
 
 use WordPress\AI\Abilities\Plugin_Builder\Get_Active_Theme;
 use WordPress\AI\Abilities\Plugin_Builder\Get_Installed_Plugins;
+use WordPress\AI\Abilities\Plugin_Builder\Get_Post_Types;
+use WordPress\AI\Abilities\Plugin_Builder\Get_Taxonomies;
 use WordPress\AI\Abilities\Plugin_Builder\Plugin_Prompt_Enhancement;
 use WordPress\AI\Abstracts\Abstract_Feature;
 use WordPress\AI\Experiments\Experiment_Category;
@@ -189,6 +191,24 @@ class Plugin_Builder extends Abstract_Feature {
 				'label'         => __( 'Get the Active Theme', 'ai' ),
 				'description'   => __( 'Retrieves the active theme with its name and description. If it is a child theme, also returns the parent details.', 'ai' ),
 				'ability_class' => Get_Active_Theme::class,
+			),
+		);
+
+		wp_register_ability(
+			'ai/get-post-types',
+			array(
+				'label'         => __( 'Get Registered Post Types', 'ai' ),
+				'description'   => __( 'Retrieves all registered post types with their details.', 'ai' ),
+				'ability_class' => Get_Post_Types::class,
+			),
+		);
+
+		wp_register_ability(
+			'ai/get-taxonomies',
+			array(
+				'label'         => __( 'Get Registered Taxonomies', 'ai' ),
+				'description'   => __( 'Retrieves all registered taxonomies with their details.', 'ai' ),
+				'ability_class' => Get_Taxonomies::class,
 			),
 		);
 	}
