@@ -963,28 +963,21 @@ export default function App() {
 			</div>
 
 			<div className="apb-chat__footer">
-				<div
-					style={ {
-						display: 'flex',
-						justifyContent: 'space-between',
-						fontSize: '12px',
-						color: '#666',
-						paddingBottom: '10px',
-					} }
-				>
-					<div>
-						<strong>{ __( 'Available tools:', 'ai' ) }</strong>{ ' ' }
-						{ AVAILABLE_TOOLS.map( ( t ) => t.name ).join( ', ' ) }
+				{ tokenUsage && tokenUsage.total_tokens > 0 && (
+					<div
+						style={ {
+							fontSize: '12px',
+							color: '#666',
+							paddingBottom: '10px',
+							textAlign: 'right',
+						} }
+					>
+						<strong>{ __( 'Tokens Used:', 'ai' ) }</strong>{ ' ' }
+						{ tokenUsage.total_tokens.toLocaleString() } (
+						{ tokenUsage.total_input_tokens.toLocaleString() }↑{ ' ' }
+						{ tokenUsage.total_output_tokens.toLocaleString() }↓)
 					</div>
-					{ tokenUsage && tokenUsage.total_tokens > 0 && (
-						<div>
-							<strong>{ __( 'Tokens Used:', 'ai' ) }</strong>{ ' ' }
-							{ tokenUsage.total_tokens.toLocaleString() } (
-							{ tokenUsage.total_input_tokens.toLocaleString() }↑{ ' ' }
-							{ tokenUsage.total_output_tokens.toLocaleString() }↓)
-						</div>
-					) }
-				</div>
+				) }
 				<div className="apb-chat__input-wrapper">
 					<textarea
 						ref={ textareaRef }
