@@ -34,7 +34,7 @@ class Get_Installed_Plugins extends Abstract_Ability {
 			),
 			'status'       => array(
 				'type'        => 'string',
-				'enum'        => array( 'active', 'inactive' ),
+				'enum'        => array( 'active', 'inactive', 'must-use' ),
 				'description' => __( 'Whether the plugin is currently active.', 'ai' ),
 			),
 			'name'         => array(
@@ -131,11 +131,12 @@ class Get_Installed_Plugins extends Abstract_Ability {
 
 		$requested_fields = ! empty( $input['fields'] ) ? $input['fields'] : array_keys( $this->get_plugin_fields() );
 
-		if ( ! function_exists( 'get_plugins' ) ) {
+		if ( ! function_exists( 'get_plugins' ) || ! function_exists( 'get_mu_plugins' ) ) {
 			require_once ABSPATH . 'wp-admin/includes/plugin.php';
 		}
 
-		$plugins = get_plugins();
+		$plugins    = get_plugins();
+		$mu_plugins = get_mu_plugins();
 
 		$result = array();
 
@@ -149,13 +150,32 @@ class Get_Installed_Plugins extends Abstract_Ability {
 				'author_uri'   => $plugin_data['AuthorURI'] ?? '',
 				'description'  => $plugin_data['Description'] ?? '',
 				'version'      => $plugin_data['Version'] ?? '',
-				'network_only' => $plugin_data['Network'] ?? '',
+				'network_only' => (bool) ( $plugin_data['Network'] ?? false ),
 				'requires_wp'  => $plugin_data['RequiresWP'] ?? '',
 				'requires_php' => $plugin_data['RequiresPHP'] ?? '',
 				'textdomain'   => $plugin_data['TextDomain'] ?? '',
 			);
 
 			$result[] = array_intersect_key( $plugin_info, array_flip( $requested_fields ) );
+		}
+
+		foreach ( $mu_plugins as $mu_plugin_file => $mu_plugin_data ) {
+			$mu_plugin_info = array(
+				'plugin'       => $mu_plugin_file,
+				'status'       => 'must-use',
+				'name'         => $mu_plugin_data['Name'] ?? '',
+				'plugin_uri'   => $mu_plugin_data['PluginURI'] ?? '',
+				'author'       => $mu_plugin_data['Author'] ?? '',
+				'author_uri'   => $mu_plugin_data['AuthorURI'] ?? '',
+				'description'  => $mu_plugin_data['Description'] ?? '',
+				'version'      => $mu_plugin_data['Version'] ?? '',
+				'network_only' => true,
+				'requires_wp'  => $mu_plugin_data['RequiresWP'] ?? '',
+				'requires_php' => $mu_plugin_data['RequiresPHP'] ?? '',
+				'textdomain'   => $mu_plugin_data['TextDomain'] ?? '',
+			);
+
+			$result[] = array_intersect_key( $mu_plugin_info, array_flip( $requested_fields ) );
 		}
 
 		return $result;
