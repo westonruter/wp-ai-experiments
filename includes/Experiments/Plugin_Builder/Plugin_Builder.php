@@ -239,7 +239,10 @@ class Plugin_Builder extends Abstract_Feature {
 			plugins_url( 'build/experiments/plugin-builder.js', dirname( __DIR__, 2 ) ),
 			array_merge( $assets['dependencies'], array( 'wp-ai-client' ) ),
 			$assets['version'],
-			true
+			array(
+				'in_footer'           => true,
+				'module_dependencies' => array( '@wordpress/core-abilities' ),
+			)
 		);
 
 		wp_set_script_translations( 'ai-plugin-builder', 'ai' );
