@@ -931,16 +931,15 @@ export default function App() {
 						) }
 					/>
 					<button
-						className="apb-chat__send-btn"
+						className={ `apb-chat__send-btn ${ isProcessing ? 'apb-chat__send-btn--stop' : '' }` }
 						disabled={
 							isEnhancing || ( ! isProcessing && ! input.trim() )
 						}
 						onClick={ isProcessing ? cancelGeneration : handleSend }
 						title={ isProcessing ? __( 'Stop Generation', 'ai' ) : __( 'Press Enter to send, Shift+Enter for new line', 'ai' ) }
-						style={ isProcessing ? { background: 'transparent', border: 'none' } : {} }
 					>
 						{ isProcessing ? (
-							<span style={ { fontSize: '20px' } }>🛑</span>
+							<span className="apb-chat__stop-icon">🛑</span>
 						) : (
 							<span className="dashicons dashicons-arrow-up-alt"></span>
 						) }
