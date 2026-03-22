@@ -100,6 +100,10 @@ class PluginWriter {
 			return new WP_Error( 'no_main_file', 'Could not determine the main plugin file.' );
 		}
 
+		if ( 0 !== validate_file( $main_file ) ) {
+			return new WP_Error( 'invalid_main_file_path', 'The main file path is invalid.' );
+		}
+
 		// Ensure the main plugin file has the AI Plugin Built header.
 		$main_full_path = trailingslashit( $plugins_dir ) . $main_file;
 		$main_content   = $filesystem->get_contents( $main_full_path );
