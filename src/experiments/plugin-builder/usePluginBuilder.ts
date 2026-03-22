@@ -604,11 +604,11 @@ export function usePluginBuilder() {
 				const systemPrompt = `You are an expert autonomous WordPress developer. You have been given a plan to build a plugin.
 Your goal is to write all the files necessary according to the plan.
 It is HIGHLY recommended to use the \`discover_abilities\` tool right at the beginning before writing any code to gain additional context and guidance on available WP features.
-You must use the write_file tool to write each file.
-You must use the list_plugins tool to verify the planned plugin slug is NOT already taken. If it is taken, pick a new descriptive slug prefixed with \`apb-\`.
-When you are completely finished writing all the code, you MUST call the finish tool and optionally pass the new slug if it changed.
-IMPORTANT: You MUST NOT call the finish tool in the same turn alongside other tools. Call it ALONE in a subsequent turn.
-Do not stop until you have called finish.`;
+You must use the \`write_file\` tool to write each file.
+You must use the \`list_plugins\` tool to verify the planned plugin slug is NOT already taken. If it is taken, pick a new descriptive slug prefixed with \`apb-\`.
+When you are completely finished writing all the code, you MUST call the \`finish\` tool and optionally pass the new slug if it changed.
+IMPORTANT: You MUST NOT call the \`finish\` tool in the same turn alongside other tools. Call it ALONE in a subsequent turn.
+Do not stop until you have called \`finish\`.`;
 
 				let coderPromptBuilder = window.wp.aiClient
 					.prompt(
