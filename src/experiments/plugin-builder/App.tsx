@@ -652,6 +652,22 @@ export default function App() {
 																'Plugin installed successfully!',
 																'ai'
 														  ) }
+												{ msg.data.plugin && (
+													<>
+														{ ' ' }
+														<a
+															href={ `plugin-editor.php?plugin=${ encodeURIComponent( msg.data.plugin.endsWith( '.php' ) ? msg.data.plugin : msg.data.plugin + '.php' ) }` }
+															target="_blank"
+															rel="noopener noreferrer"
+														>
+															{ __(
+																'Open in File Editor',
+																'ai'
+															) }
+															<span className="dashicons dashicons-external" />
+														</a>
+													</>
+												) }
 											</div>
 										) }
 										{ msg.type === 'error' && (
