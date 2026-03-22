@@ -9,8 +9,9 @@ declare( strict_types=1 );
 
 namespace WordPress\AI\Experiments\Plugin_Builder;
 
-use WordPress\AI\Abilities\Plugin_Builder\Plugin_Prompt_Enhancement;
+use WordPress\AI\Abilities\Plugin_Builder\Get_Active_Theme;
 use WordPress\AI\Abilities\Plugin_Builder\Get_Installed_Plugins;
+use WordPress\AI\Abilities\Plugin_Builder\Plugin_Prompt_Enhancement;
 use WordPress\AI\Abstracts\Abstract_Feature;
 use WordPress\AI\Experiments\Experiment_Category;
 use WordPress\AI\Experiments\Plugin_Builder\Rest\DownloadController;
@@ -181,6 +182,15 @@ class Plugin_Builder extends Abstract_Feature {
 				'ability_class' => Get_Installed_Plugins::class,
 			),
 		);
+
+		wp_register_ability(
+			'ai/get-active-theme',
+			array(
+				'label'         => __( 'Get the Active Theme', 'ai' ),
+				'description'   => __( 'Retrieves the active theme with its name and description. If it is a child theme, also returns the parent details.', 'ai' ),
+				'ability_class' => Get_Active_Theme::class,
+			),
+		);
 	}
 
 	/**
@@ -239,7 +249,10 @@ class Plugin_Builder extends Abstract_Feature {
 			plugins_url( 'build/experiments/plugin-builder.js', dirname( __DIR__, 2 ) ),
 			array_merge( $assets['dependencies'], array( 'wp-ai-client' ) ),
 			$assets['version'],
-			true
+			array(
+				'in_footer'           => true,
+				'module_dependencies' => array( '@wordpress/core-abilities' ),
+			)
 		);
 
 		wp_set_script_translations( 'ai-plugin-builder', 'ai' );

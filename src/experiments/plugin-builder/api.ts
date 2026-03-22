@@ -69,11 +69,10 @@ export async function executeAbility(
 	name: string,
 	input: any
 ): Promise< any > {
-	return apiFetch( {
-		path: `/wp-abilities/v1/abilities/${ name }/run`,
-		method: 'POST',
-		data: { input },
-	} );
+	const { executeAbility: execute } = await import(
+		/* webpackIgnore: true */ '@wordpress/abilities'
+	);
+	return execute( name, input ?? null );
 }
 
 export async function discoverAbilities(): Promise< any > {
