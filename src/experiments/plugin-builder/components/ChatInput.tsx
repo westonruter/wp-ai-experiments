@@ -83,33 +83,56 @@ export function ChatInput( {
 				rows={ 1 }
 			/>
 			<button
-				className="apb-chat__prompt-tip-icon"
-				onClick={ handleEnhancePrompt }
-				disabled={ ! input.trim() || isProcessing || isEnhancing }
-				title={ __( 'Enhance prompt with AI', 'ai' ) }
+				className={ `apb-chat__send-btn ${ isProcessing ? 'apb-chat__send-btn--stop' : '' }` }
+				disabled={
+					isEnhancing || ( ! isProcessing && ! input.trim() )
+				}
+				onClick={ isProcessing ? cancelGeneration : handleSend }
 			>
-				<div className="apb-chat__prompt-tip-icon-wrapper">
-					{ isEnhancing ? <SmallSpinner /> : <EnhanceIcon /> }
+				{ isProcessing ? (
+					<span className="apb-chat__stop-icon"></span>
+				) : (
+					<span className="dashicons dashicons-arrow-up-alt"></span>
+				) }
+				<div className="apb-chat__send-tooltip">
+					{ isProcessing ? __( 'Stop Generation', 'ai' ) : __( 'Press Enter to send, Shift+Enter for new line', 'ai' ) }
 				</div>
 			</button>
-			{ isProcessing ? (
-				<button
-					className="apb-chat__stop-btn"
-					onClick={ cancelGeneration }
-					title={ __( 'Stop generating', 'ai' ) }
-				>
-					<span className="dashicons dashicons-controls-pause"></span>
-				</button>
-			) : (
-				<button
-					className="apb-chat__send-btn"
-					onClick={ handleSend }
-					disabled={ ! input.trim() || isEnhancing }
-					title={ __( 'Send message', 'ai' ) }
-				>
-					<span className="dashicons dashicons-arrow-right-alt2"></span>
-				</button>
-			) }
+			<button
+				className="apb-chat__prompt-tip-icon"
+				disabled={
+					isProcessing || isEnhancing || ! input.trim()
+				}
+				onClick={ handleEnhancePrompt }
+				title={ __( 'Enhance prompt with AI', 'ai' ) }
+			>
+				<span className="apb-chat__prompt-tip-icon-wrapper">
+					{ isEnhancing ? <SmallSpinner /> : <EnhanceIcon /> }
+					<div className="apb-chat__prompt-tip-tooltip">
+						{ [
+							__(
+								'Describe what your plugin should do',
+								'ai'
+							),
+							__(
+								'Mention specific features you need',
+								'ai'
+							),
+							__(
+								'Include where settings should appear',
+								'ai'
+							),
+							__(
+								'Click to enhance your prompt with AI',
+								'ai'
+							),
+						].join( ' \\u2022 ' ) }
+					</div>
+				</span>
+				<span className="apb-chat__prompt-tip-text">
+					{ __( 'Enhance with AI', 'ai' ) }
+				</span>
+			</button>
 			{ enhanceError && (
 				<div className="apb-chat__enhance-error">
 					<span className="dashicons dashicons-warning"></span>{ ' ' }
