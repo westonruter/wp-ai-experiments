@@ -936,7 +936,6 @@ export default function App() {
 							isEnhancing || ( ! isProcessing && ! input.trim() )
 						}
 						onClick={ isProcessing ? cancelGeneration : handleSend }
-						title={ isProcessing ? __( 'Stop Generation', 'ai' ) : __( 'Press Enter to send, Shift+Enter for new line', 'ai' ) }
 					>
 						{ isProcessing ? (
 							<span className="apb-chat__stop-icon"></span>
