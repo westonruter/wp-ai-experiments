@@ -923,10 +923,10 @@ export default function App() {
 					{ tokenUsage && tokenUsage.total_tokens > 0 && (
 						<div>
 							<strong>{ __( 'Tokens Used:', 'ai' ) }</strong>{ ' ' }
-							{ tokenUsage.total_tokens } (
-							{ tokenUsage.total_input_tokens }{ ' ' }
+							{ tokenUsage.total_tokens.toLocaleString() } (
+							{ tokenUsage.total_input_tokens.toLocaleString() }{ ' ' }
 							{ __( 'in', 'ai' ) },{ ' ' }
-							{ tokenUsage.total_output_tokens }{ ' ' }
+							{ tokenUsage.total_output_tokens.toLocaleString() }{ ' ' }
 							{ __( 'out', 'ai' ) })
 						</div>
 					) }
