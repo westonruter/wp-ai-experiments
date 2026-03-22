@@ -943,6 +943,9 @@ export default function App() {
 						) : (
 							<span className="dashicons dashicons-arrow-up-alt"></span>
 						) }
+						<div className="apb-chat__send-tooltip">
+							{ isProcessing ? __( 'Stop Generation', 'ai' ) : __( 'Press Enter to send, Shift+Enter for new line', 'ai' ) }
+						</div>
 					</button>
 					<button
 						className="apb-chat__prompt-tip-icon"
