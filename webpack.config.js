@@ -8,6 +8,7 @@ const defaultConfig = require( '@wordpress/scripts/config/webpack.config' );
  */
 const RemoveEmptyScriptsPlugin = require( 'webpack-remove-empty-scripts' );
 const path = require( 'path' );
+const webpack = require( 'webpack' );
 
 // Extend the default webpack config.
 module.exports = {
@@ -80,5 +81,20 @@ module.exports = {
 		new RemoveEmptyScriptsPlugin( {
 			stage: RemoveEmptyScriptsPlugin.STAGE_AFTER_PROCESS_PLUGINS,
 		} ),
+
+		new webpack.NormalModuleReplacementPlugin( /^node:/, ( resource ) => {
+			resource.request = resource.request.replace( /^node:/, '' );
+		} ),
 	],
+	resolve: {
+		...defaultConfig.resolve,
+		alias: {
+			...defaultConfig.resolve?.alias,
+			'node:zlib': false,
+		},
+		fallback: {
+			...defaultConfig.resolve?.fallback,
+			zlib: false,
+		},
+	},
 };
