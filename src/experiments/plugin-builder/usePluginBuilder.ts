@@ -658,7 +658,7 @@ export function usePluginBuilder() {
 					'When you have written every file, you MUST call the `finish` tool — optionally passing the new slug if it changed.',
 					'IMPORTANT: Call `finish` ALONE in a separate turn. Do NOT call it alongside any other tool.',
 					'Do not stop until `finish` has been called.',
-				].join('\n');
+				].join( '\n' );
 
 				let coderPromptBuilder = window.wp.aiClient
 					.prompt(
