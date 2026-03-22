@@ -1352,10 +1352,10 @@ export function usePluginBuilder() {
 		void installPlugin( true );
 	}, [ installPlugin ] );
 
-	const downloadPlugin = useCallback( () => {
+	const downloadPlugin = useCallback( async () => {
 		if ( ! currentPlan || ! currentFiles.length ) return;
 
-		api.downloadPlugin( currentPlan.plugin_slug, currentFiles );
+		await api.downloadPlugin( currentPlan.plugin_slug, currentFiles );
 		log(
 			'success',
 			__( 'Plugin downloaded', 'ai' ),
