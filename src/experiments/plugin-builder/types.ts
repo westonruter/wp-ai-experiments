@@ -7,6 +7,7 @@ export type BuilderState =
 	| 'ready_to_install'
 	| 'installing'
 	| 'installed'
+	| 'failed'
 	| 'error';
 
 export type LogLevel = 'info' | 'success' | 'warn' | 'error';
