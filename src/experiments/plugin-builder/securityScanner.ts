@@ -79,12 +79,12 @@ export function scanFiles( files: PluginFile[] ): {
 		for ( let i = 0; i < lines.length; i++ ) {
 			const line = lines[ i ];
 			for ( const pattern of DANGEROUS_PATTERNS ) {
-				if ( pattern.test( line ) ) {
+				if ( line && pattern.test( line ) ) {
 					issues.push( {
 						file_path: file.path,
 						line: i + 1,
 						pattern: pattern.toString(),
-						line_content: line.trim(),
+						line_content: line ? line.trim() : '',
 					} );
 				}
 			}

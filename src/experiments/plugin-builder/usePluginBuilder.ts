@@ -1,1566 +1,248 @@
-/* eslint-disable */
-
-import { useState, useCallback, useMemo, useRef } from '@wordpress/element';
-import { __, sprintf } from '@wordpress/i18n';
-import { select, dispatch } from '@wordpress/data';
-import { store as commandsStore } from '@wordpress/commands';
-import {
-	BuilderState,
-	ChatMessage,
-	GeneratedFile,
-	LogEntry,
-	LogLevel,
-	PluginPlan,
-	ReviewResult,
-	TokenUsageSummary,
-	needsSlugConfirmation,
-	AnalysisResponse,
-	ChatHistory,
-} from './types';
+import { useEffect, useCallback } from '@wordpress/element';
+import { activatePlugin } from '@wp-playground/client';
+import { usePlayground } from './hooks/usePlayground';
+import { useReviewAgent } from './hooks/useReviewAgent';
+import { useBuilderState } from './hooks/useBuilderState';
+import { useChatSync } from './hooks/useChatSync';
+import { usePluginInstaller } from './hooks/usePluginInstaller';
+import { useCodeGenerator, AVAILABLE_TOOLS } from './hooks/useCodeGenerator';
 import * as api from './api';
-import {
-	getSystemPrompt,
-	getIntentPrompt,
-	getPlannerPrompt,
-	getAnalyzerPrompt,
-} from './prompts';
-import { scanFiles } from './securityScanner';
 
-// Type augmentations for wp.aiClient since there's no types package yet
-declare global {
-	interface Window {
-		wp: any;
-	}
-}
+export { AVAILABLE_TOOLS };
 
-export const AVAILABLE_TOOLS = [
-	{
-		name: 'discover_abilities',
-		description: 'Lists available WordPress abilities.',
-	},
-	{
-		name: 'execute_ability',
-		description: 'Executes a single WordPress ability.',
-		parameters: {
-			type: 'object',
-			properties: {
-				name: { type: 'string', description: 'Name of the ability' },
-				input: {
-					type: 'object',
-					description: 'Arguments for the ability',
-				},
-			},
-			required: [ 'name', 'input' ],
-		},
-	},
-	{
-		name: 'write_file',
-		description: 'Writes a file for the plugin.',
-		parameters: {
-			type: 'object',
-			properties: {
-				path: {
-					type: 'string',
-					description:
-						'Path to the file relative to the plugin root (e.g., plugin-slug.php)',
-				},
-				content: {
-					type: 'string',
-					description: 'Full content of the file',
-				},
-			},
-			required: [ 'path', 'content' ],
-		},
-	},
-	{
-		name: 'read_file',
-		description: 'Reads a previously generated file from the plugin.',
-		parameters: {
-			type: 'object',
-			properties: {
-				path: {
-					type: 'string',
-					description: 'Path to the file relative to the plugin root',
-				},
-			},
-			required: [ 'path' ],
-		},
-	},
-	{
-		name: 'finish',
-		description:
-			'Call this function ONLY when you have finished writing all files for the plugin.',
-		parameters: {
-			type: 'object',
-			properties: {
-				plugin_slug: {
-					type: 'string',
-					description:
-						'Override the planned slug if a conflict was detected. Must start with apb-',
-				},
-			},
-		},
-	},
-];
+export function usePluginBuilder(
+	iframeRef?: any,
+	setShowPreview?: ( show: boolean ) => void
+) {
+	// Initialize core state
+	const builderState = useBuilderState();
 
-let messageIdCounter = 0;
-let logIdCounter = 0;
-
-function createMessage(
-	role: 'user' | 'assistant',
-	type: ChatMessage[ 'type' ],
-	content: string,
-	data?: any
-): ChatMessage {
-	return {
-		id: String( ++messageIdCounter ) + '-' + Date.now(),
-		role,
-		type,
-		content,
-		data,
-		timestamp: new Date(),
-	};
-}
-
-/**
- * Parses JSON with markdown delimiters removed.
- *
- * @param {string} json
- * @return {any} Parsed JSON.
- */
-function parseJSON( json: string ): any {
-	return JSON.parse(
-		json.replace( /^```json/, '' ).replace( /```\s*$/, '' )
+	// Initialize Chat Sync & Persistence
+	const chatSync = useChatSync(
+		builderState.messagesRef,
+		builderState.activeChatIdRef,
+		builderState.chatTitleRef,
+		builderState.setChatTitle,
+		builderState.setActiveChatId,
+		builderState.setMessages,
+		builderState.setLogs,
+		builderState.setCurrentPlan,
+		builderState.setCurrentFiles,
+		builderState.setCurrentReview
 	);
-}
 
-function mapChatMessagesToApiMessages( messages: ChatMessage[] ): any[] {
-	const raw = messages
-		.filter( ( m ) => [ 'text', 'plan', 'review' ].includes( m.type ) )
-		.filter( ( m ) => m.content || m.data )
-		.map( ( m ) => {
-			let text = m.content || '';
-			if ( m.type === 'plan' && m.data ) {
-				text +=
-					'\n\nPlan:\n```json\n' +
-					JSON.stringify( {
-						plugin_name: m.data.plugin_name,
-						description: m.data.description,
-						files: m.data.files.map( ( f: any ) => f.path ),
-					} ) +
-					'\n```';
+	// Initialize Background Workers
+	const playground = usePlayground( iframeRef, setShowPreview );
+	const reviewAgent = useReviewAgent(
+		playground.getClient,
+		playground.writePluginFiles,
+		playground.runPluginCheck
+	);
+
+	// Initialize AI Execution Loop
+	const codeGenerator = useCodeGenerator(
+		builderState,
+		chatSync,
+		playground,
+		reviewAgent
+	);
+
+	// Initialize Hardware Handlers (Filesystem interaction)
+	const pluginInstaller = usePluginInstaller(
+		builderState.currentPlan,
+		builderState.currentFiles,
+		builderState.messagesRef,
+		builderState.setState,
+		builderState.setSlugConflictWarnings,
+		builderState.addMessage,
+		builderState.log,
+		builderState.removeLastLoading,
+		builderState.setInstalledPluginFile
+	);
+
+	// Side-effect: URL Chat loading on mount
+	useEffect( () => {
+		const searchParams = new URLSearchParams( window.location.search );
+		const queryChatId = searchParams.get( 'chat_id' );
+
+		if ( queryChatId ) {
+			const id = parseInt( queryChatId, 10 );
+			if ( ! isNaN( id ) ) {
+				api.getChatById( id )
+					.then( ( chat: any ) => {
+						if ( chat ) {
+							chatSync.loadChat( chat );
+						}
+					} )
+					.catch( ( err: any ) => {
+						builderState.log(
+							'error',
+							'Failed to load chat from URL',
+							err.message
+						);
+					} );
 			}
-			return {
-				role: m.role === 'assistant' ? 'model' : m.role,
-				text: text,
-			};
-		} );
-
-	// The current request (user description) is inside raw.
-	// WP AI Client expects the messages array to end with 'user',
-	// so we leave it intact.
-
-	const merged: any[] = [];
-	for ( const msg of raw ) {
-		if (
-			merged.length > 0 &&
-			merged[ merged.length - 1 ].role === msg.role
-		) {
-			merged[ merged.length - 1 ].parts[ 0 ].text += '\n\n' + msg.text;
-		} else {
-			merged.push( {
-				role: msg.role,
-				parts: [ { type: 'text', text: msg.text } ],
-			} );
 		}
-	}
+	}, [ chatSync.loadChat, builderState.log ] );
 
-	// Ensure API history strict requirement: first item MUST be user if array is not empty
-	if ( merged.length > 0 && merged[ 0 ].role === 'model' ) {
-		merged.unshift( {
-			role: 'user',
-			parts: [
-				{
-					type: 'text',
-					text: 'Hello, please build a WordPress plugin for me.',
-				},
-			],
-		} );
-	}
-
-	return merged;
-}
-
-export function usePluginBuilder() {
-	const [ state, setState ] = useState< BuilderState >( 'idle' );
-	const [ messages, setMessages ] = useState< ChatMessage[] >( [] );
-	const [ logs, setLogs ] = useState< LogEntry[] >( [] );
-	const [ currentPlan, setCurrentPlan ] = useState< PluginPlan | null >(
-		null
-	);
-	const [ currentFiles, setCurrentFiles ] = useState< GeneratedFile[] >( [] );
-	const [ currentReview, setCurrentReview ] = useState< ReviewResult | null >(
-		null
-	);
-	const [ currentStep, setCurrentStep ] = useState< string >( '' );
-	const [ error, setError ] = useState< string | null >( null );
-	const [ tokenUsage, setTokenUsage ] = useState< TokenUsageSummary | null >(
-		null
-	);
-	const [ installedPluginFile, setInstalledPluginFile ] = useState<
-		string | null
-	>( null );
-	const [ slugConflictWarnings, setSlugConflictWarnings ] = useState<
-		string[]
-	>( [] );
-
-	const [ activeChatId, _setActiveChatId ] = useState< number | null >(
-		null
-	);
-	const activeChatIdRef = useRef< number | null >( null );
-
-	const setActiveChatId = useCallback( ( id: number | null ) => {
-		_setActiveChatId( id );
-		activeChatIdRef.current = id;
-	}, [] );
-
-	const [ chatTitle, _setChatTitle ] = useState< string >( '' );
-	const chatTitleRef = useRef< string >( '' );
-
-	const abortRef = useRef< boolean >( false );
-
-	const setChatTitle = useCallback( ( title: string ) => {
-		_setChatTitle( title );
-		chatTitleRef.current = title;
-	}, [] );
-
-	const tokenUsageRef = useRef< TokenUsageSummary >( {
-		total_tokens: 0,
-		total_input_tokens: 0,
-		total_output_tokens: 0,
-		steps: [],
-	} );
-
-	const addTokenUsage = useCallback(
-		( stepName: string, modelName: string, tu: any ) => {
-			if ( ! tu ) return;
-			const updated = { ...tokenUsageRef.current };
-			updated.total_input_tokens += tu.promptTokens || 0;
-			updated.total_output_tokens += tu.completionTokens || 0;
-			updated.total_tokens += tu.totalTokens || 0;
-			const steps = [ ...updated.steps ];
-			steps.push( {
-				step: stepName,
-				model: modelName,
-				input_tokens: tu.promptTokens || 0,
-				output_tokens: tu.completionTokens || 0,
-			} );
-			updated.steps = steps;
-			tokenUsageRef.current = updated;
-			setTokenUsage( { ...updated } );
-		},
-		[]
-	);
-
-	const resetTokenUsage = useCallback( () => {
-		const resetVal = {
-			total_tokens: 0,
-			total_input_tokens: 0,
-			total_output_tokens: 0,
-			steps: [],
-		};
-		tokenUsageRef.current = resetVal;
-		setTokenUsage( resetVal );
-	}, [] );
-
-	const startTimeRef = useRef< number >( 0 );
-
-	const messagesRef = useRef< ChatMessage[] >( [] );
-
-	// Logging
-	const log = useCallback(
-		( level: LogLevel, message: string, detail?: string ) => {
-			setLogs( ( prev ) => [
-				...prev,
-				{
-					id: ++logIdCounter,
-					timestamp: new Date(),
-					level,
-					message,
-					detail,
-				},
-			] );
-		},
-		[]
-	);
-
-	const elapsed = useCallback( () => {
-		if ( ! startTimeRef.current ) return '';
-		const secs = Math.round( ( Date.now() - startTimeRef.current ) / 1000 );
-		return `${ secs }s`;
-	}, [] );
-
-	const addMessage = useCallback( ( msg: ChatMessage ) => {
-		setMessages( ( prev ) => {
-			const next = [ ...prev, msg ];
-			messagesRef.current = next;
-			return next;
-		} );
-	}, [] );
-
-	const updateLastLoading = useCallback( ( content: string ) => {
-		setMessages( ( prev ) => {
-			const index = [ ...prev ]
-				.reverse()
-				.findIndex( ( m ) => m.type === 'loading' );
-			if ( index !== -1 ) {
-				const realIndex = prev.length - 1 - index;
-				const newMsgs = [ ...prev ];
-				newMsgs[ realIndex ] = { ...newMsgs[ realIndex ], content };
-				messagesRef.current = newMsgs;
-				return newMsgs;
-			}
-			return prev;
-		} );
-	}, [] );
-
-	const removeLastLoading = useCallback( () => {
-		setMessages( ( prev ) => {
-			const index = [ ...prev ]
-				.reverse()
-				.findIndex( ( m ) => m.type === 'loading' );
-			if ( index !== -1 ) {
-				const realIndex = prev.length - 1 - index;
-				const newMsgs = [ ...prev ];
-				newMsgs.splice( realIndex, 1 );
-				messagesRef.current = newMsgs;
-				return newMsgs;
-			}
-			return prev;
-		} );
-	}, [] );
-
-	const cancelGeneration = useCallback(
-		( e?: any ) => {
-			if ( e && e.preventDefault ) e.preventDefault();
-			abortRef.current = true;
-			setState( 'idle' );
-			removeLastLoading();
-			addMessage(
-				createMessage(
-					'assistant',
-					'text',
-					__( '<span class="apb-chat__stop-icon-text"></span>  Generation stopped by user.', 'ai' )
-				)
-			);
-		},
-		[ removeLastLoading, addMessage ]
-	);
-
-	// Save Chat
-	const performChatSave = useCallback(
-		async ( currentSlug?: string ) => {
-			const latestMessages = messagesRef.current;
-			if ( latestMessages.length === 0 ) return;
-
-			const isNew = ! activeChatIdRef.current;
-			const currentActiveId = activeChatIdRef.current;
-
-			try {
-				let title = chatTitleRef.current;
-				if ( isNew ) {
-					const planMsg = latestMessages
-						.slice()
-						.reverse()
-						.find( ( m ) => m.type === 'plan' );
-					if ( planMsg && planMsg.data?.plugin_name ) {
-						title = planMsg.data.plugin_name;
-					} else {
-						title = 'Plugin Builder Chat';
-					}
-					setChatTitle( title );
-				}
-				const result = await api.saveChatHistory(
-					latestMessages,
-					currentSlug,
-					currentActiveId || undefined,
-					title
-				);
-				if ( result && result.id ) {
-					setActiveChatId( result.id );
-				}
-			} catch ( e ) {
-				console.error( 'Failed to save chat history:', e );
-			}
-		},
-		[ setChatTitle, setActiveChatId ]
-	);
-
-	const handleError = useCallback(
-		( message: string ) => {
-			setState( 'error' );
-			setError( message );
-			removeLastLoading();
-			addMessage( createMessage( 'assistant', 'error', message ) );
-			log( 'error', __( 'Pipeline error', 'ai' ), message );
-		},
-		[ addMessage, log, removeLastLoading ]
-	);
-
-	const updateStep = useCallback(
-		( step: string ) => {
-			setCurrentStep( step );
-			updateLastLoading( step );
-			log( 'info', `Status: ${ state }`, step );
-		},
-		[ state, updateLastLoading, log ]
-	);
-
-	// Actions
-	const sendDescription = useCallback(
-		async ( description: string ) => {
-			if ( ! description.trim() ) return;
-			if ( ! window.wp?.aiClient?.prompt ) {
-				handleError(
-					__( 'WP AI Client JavaScript API is not available.', 'ai' )
-				);
-				return;
+	const previewInPlayground = useCallback(
+		async ( suggestedCommand?: string ) => {
+			if ( setShowPreview ) {
+				setShowPreview( true );
 			}
 
-			const previousPlan = currentPlan;
-			const previousFiles = currentFiles.length > 0 ? currentFiles : [];
-
-			setError( null );
-			setState( 'planning' );
-			startTimeRef.current = Date.now();
-			resetTokenUsage();
-
-			log(
-				'info',
-				__( 'Request sent', 'ai' ),
-				description.substring( 0, 100 )
-			);
-			addMessage( createMessage( 'user', 'text', description ) );
-			addMessage(
-				createMessage(
-					'assistant',
-					'loading',
-					__( 'Analyzing your request...', 'ai' )
-				)
-			);
-
-			abortRef.current = false;
-
-			try {
-				const apiHistory = mapChatMessagesToApiMessages(
-					messagesRef.current
-				);
-
-				// Phase 1: Intent Detection
-				updateStep( __( 'Detecting intent...', 'ai' ) );
-				const intentPromptBuilder = window.wp.aiClient
-					.prompt( getIntentPrompt( description, previousPlan ) )
-					.usingSystemInstruction( getSystemPrompt( 'detector' ) )
-					.usingTemperature( 0.1 )
-					.usingMaxTokens( 500 )
-					.asJsonResponse();
-
-				if ( apiHistory.length > 0 ) {
-					intentPromptBuilder.withHistory( ...apiHistory );
-				}
-
-				const intentResult =
-					await intentPromptBuilder.generateTextResult();
-				if ( abortRef.current ) return;
-				const intentText = intentResult.toText();
-				addTokenUsage(
-					'Intent Detection',
-					intentResult.modelMetadata.name || 'unknown',
-					intentResult.tokenUsage
-				);
-
-				let intentData;
+			if ( builderState.currentPlan?.plugin_slug ) {
 				try {
-					intentData = parseJSON( intentText );
-				} catch ( e ) {
-					intentData = { intent: 'plugin_request', confidence: 0.5 };
-				}
-
-				if (
-					intentData.intent === 'question' ||
-					intentData.intent === 'other'
-				) {
-					removeLastLoading();
-					addMessage(
-						createMessage(
-							'assistant',
-							'text',
-							intentData.response ||
-								__( 'I can help you build plugins.', 'ai' )
-						)
-					);
-					setState( previousPlan ? 'ready_to_install' : 'idle' );
-					void performChatSave( previousPlan?.plugin_slug );
-					return;
-				}
-
-				if ( intentData.intent !== 'modification_request' ) {
-					setCurrentPlan( null );
-					setCurrentFiles( [] );
-					setCurrentReview( null );
-					// Reset previous files context for a new request
-					previousFiles.length = 0;
-				}
-
-				// Phase 2: Planner
-				setState( 'planning' );
-				updateStep(
-					__( 'Generating plugin architecture plan...', 'ai' )
-				);
-				const maxFiles = 10;
-				const plannerBuilder = window.wp.aiClient
-					.prompt(
-						getPlannerPrompt(
-							description,
-							'simple',
-							maxFiles,
-							previousPlan
-						)
-					)
-					.usingSystemInstruction( getSystemPrompt( 'planner' ) )
-					.usingMaxTokens( 16384 )
-					.usingTemperature( 0.3 )
-					.asJsonResponse();
-
-				if ( apiHistory.length > 0 ) {
-					plannerBuilder.withHistory( ...apiHistory );
-				}
-
-				const plannerResult = await plannerBuilder.generateTextResult();
-				if ( abortRef.current ) return;
-				const plannerText = plannerResult.toText();
-				addTokenUsage(
-					'Planner',
-					plannerResult.modelMetadata.name || 'unknown',
-					plannerResult.tokenUsage
-				);
-
-				let plan: PluginPlan;
-				try {
-					plan = parseJSON( plannerText );
-				} catch ( e ) {
-					handleError(
-						__( 'Failed to parse the plugin plan JSON.', 'ai' )
-					);
-					return;
-				}
-
-				setCurrentPlan( plan );
-				log(
-					'success',
-					sprintf(
-						/* translators: %s: plugin name */
-						__( 'Plan ready: %s', 'ai' ),
-						plan.plugin_name
-					),
-					sprintf(
-						/* translators: %d: number of files */
-						__( '%d file(s)', 'ai' ),
-						plan.files.length
-					)
-				);
-
-				// Show plan inline
-				removeLastLoading();
-				addMessage(
-					createMessage(
-						'assistant',
-						'plan',
-						sprintf(
-							/* translators: %s: plugin name */
-							__( "Here's the plan for **%s**:", 'ai' ),
-							plan.plugin_name
-						),
-						plan
-					)
-				);
-				addMessage(
-					createMessage(
-						'assistant',
-						'loading',
-						__( 'Preparing generated files...', 'ai' )
-					)
-				);
-
-				// Phase 3: Generator Loop
-				setState( 'coding' );
-				const newFiles: GeneratedFile[] = [];
-
-				const systemPrompt = [
-					'You are an expert autonomous WordPress developer. You have been given a plan to build a plugin.',
-					'Your goal is to write all files necessary according to the plan, following WordPress coding standards and best practices throughout.',
-					'',
-					'=== SETUP (do these first, before writing any code) ===',
-					'1. Call `discover_abilities` immediately to gain context on available WP features.',
-					'2. Call `execute_ability` with `ai/get-installed-plugins` to verify the planned slug is NOT already taken. If taken, pick a new descriptive slug prefixed with `apb-`.',
-					'',
-					'=== FILE WRITING ===',
-					'Use the `write_file` tool to write every file.',
-					'In the main plugin file, include the full system instructions and the provided plan inside a multi-line PHP comment.',
-					'',
-					'=== PLUGIN HEADER ===',
-					'The main plugin file must have a complete header block including: Plugin Name, Plugin URI, Description, Version, Requires at least, Requires PHP, Author, Author URI, License, License URI, Text Domain, Domain Path, and — if applicable — Requires Plugins (for plugin dependencies).',
-					'',
-					'=== NAMESPACING & PREFIXING ===',
-					'All PHP files must declare a unique namespace derived from the plugin slug, in PascalCase with `APB` as the vendor prefix (e.g., slug `apb-my-plugin` → namespace `APB\\MyPlugin`).',
-					'All global functions, constants, option keys, transient keys, hook names, and database table names must be prefixed with the plugin slug (e.g., `apb_my_plugin_`).',
-					'CSS classes and JS variable names must also be prefixed consistently.',
-					'',
-					'=== SECURITY ===',
-					'Prevent direct file access at the top of every PHP file: `if ( ! defined( \'ABSPATH\' ) ) { exit; }`',
-					'Use nonces for all forms and AJAX requests: `wp_nonce_field()`, `check_admin_referer()`, `wp_verify_nonce()`.',
-					'Always verify user capabilities before any sensitive action: `current_user_can()`.',
-					'Escape all output: `esc_html()`, `esc_attr()`, `esc_url()`, `esc_js()`, `wp_kses_post()`, etc.',
-					'Sanitize all input: `sanitize_text_field()`, `absint()`, `sanitize_email()`, etc.',
-					'Use `$wpdb->prepare()` for all custom database queries.',
-					'',
-					'=== WORDPRESS FUNCTIONS & APIs ===',
-					'Prefer native WordPress functions over custom implementations wherever possible.',
-					'Use the WordPress Settings API, Options API, Transients API, and HTTP API instead of rolling your own.',
-					'Use `$wpdb` methods for database operations. Never write raw SQL without `prepare()`.',
-					'Use `WP_Query` or `get_posts()` instead of direct SQL for post queries.',
-					'Use `wp_remote_get()` / `wp_remote_post()` instead of cURL or file_get_contents for HTTP requests.',
-					'',
-					'=== HOOKS & ARCHITECTURE ===',
-					'Bootstrap the plugin through hooks — never execute code at file-include time.',
-					'Use `register_activation_hook()`, `register_deactivation_hook()`, and `register_uninstall_hook()` for lifecycle events (flush rewrite rules, create DB tables, clean up options on uninstall).',
-					'Expose your own well-named action and filter hooks so other plugins/themes can extend your plugin. Document each hook with a PHPDoc comment.',
-					'Follow the single-responsibility principle: split logic into classes (e.g., Admin, Frontend, Ajax, CPT, Shortcode).',
-					'',
-					'=== PERFORMANCE ===',
-					'Enqueue scripts and styles only when needed (check the current page/context before enqueueing).',
-					'Use `wp_enqueue_script()` / `wp_enqueue_style()` with a unique handle and version. Pass dependencies correctly.',
-					'Cache expensive or repeated computations using WordPress Transients (`set_transient()` / `get_transient()`). Delete transients on relevant data changes.',
-					'Write efficient database queries: use indexes, avoid `SELECT *`, and limit result sets.',
-					'Avoid N+1 query patterns; fetch data in bulk where possible.',
-					'',
-					'=== INTERNATIONALISATION ===',
-					'All user-facing strings must be in English and wrapped in the appropriate i18n function: `__()`, `_e()`, `_n()`, `esc_html__()`, etc., using the plugin text domain.',
-					'Add a `Domain Path: languages/` plugin header to ensure automatic translation loading.',
-					'Include a `.pot` file (and optionally starter `.po`/`.mo` files) under a `languages/` directory.',
-					'',
-					'=== CODE QUALITY ===',
-					'Add PHPDoc blocks to all classes, methods, hooks, and non-trivial functions (include @param, @return, @since, @throws where applicable).',
-					'Follow WordPress PHP Coding Standards (tabs for indentation, Yoda conditions, proper spacing).',
-					'Keep functions short and single-purpose. Extract helpers into clearly named methods.',
-					'',
-					'=== FINISHING ===',
-					'When you have written every file, you MUST call the `finish` tool — optionally passing the new slug if it changed.',
-					'IMPORTANT: Call `finish` ALONE in a separate turn. Do NOT call it alongside any other tool.',
-					'Do not stop until `finish` has been called.',
-				].join( '\n' );
-
-				let coderPromptBuilder = window.wp.aiClient
-					.prompt(
-						`Please build the plugin according to this plan:\n${ JSON.stringify(
-							plan,
-							null,
-							2
-						) }`
-					)
-					.usingSystemInstruction( systemPrompt )
-					.usingTemperature( 0.2 )
-					.usingMaxTokens( 32768 )
-					.usingFunctionDeclarations( ...AVAILABLE_TOOLS );
-
-				let isFinished = false;
-				let turnCount = 0;
-				const maxTurns = 10;
-
-				while (
-					! isFinished &&
-					turnCount < maxTurns &&
-					! abortRef.current
-				) {
-					turnCount++;
-					updateStep(
-						sprintf(
-							__( 'Agent thinking (Turn %d)...', 'ai' ),
-							turnCount
-						)
-					);
-
-					const result = await coderPromptBuilder.generateResult();
-					if ( abortRef.current ) break;
-					addTokenUsage(
-						`Generator (Turn ${ turnCount })`,
-						result.modelMetadata.name || 'unknown',
-						result.tokenUsage
-					);
-
-					const candidate = result.candidates[ 0 ];
-					if (
-						candidate.message &&
-						Array.isArray( candidate.message.parts )
-					) {
-						candidate.message.parts.forEach( ( p: any ) => {
-							if (
-								p.channel === 'thought' &&
-								p.type === 'text' &&
-								p.text
-							) {
-								addMessage(
-									createMessage(
-										'assistant',
-										'thought',
-										p.text
-									)
-								);
-							}
+					const client = playground.getClient();
+					if ( client ) {
+						await activatePlugin( client, {
+							pluginName: builderState.currentPlan.plugin_slug,
+							pluginPath: `/wordpress/wp-content/plugins/${ builderState.currentPlan.plugin_slug }`,
 						} );
 					}
-
-					if ( candidate.finishReason === 'tool_calls' ) {
-						const modelMessage = {
-							...candidate.message,
-							parts: candidate.message.parts.map( ( p: any ) => {
-								const part: any = {
-									...p,
-									channel: p.channel || 'content',
-								};
-								if ( part.functionCall ) {
-									const normalized: any = {
-										id: part.functionCall.id,
-										name: part.functionCall.name,
-									};
-									if (
-										part.functionCall.args !== undefined &&
-										part.functionCall.args !== null
-									) {
-										normalized.args =
-											part.functionCall.args;
-									}
-									part.functionCall = normalized;
-								}
-								return part;
-							} ),
-						};
-
-						const toolCalls = modelMessage.parts.filter(
-							( p: any ) => p.type === 'function_call'
-						);
-						toolCalls.sort( ( a: any, b: any ) => {
-							if ( a.functionCall.name === 'finish' ) return 1;
-							if ( b.functionCall.name === 'finish' ) return -1;
-							return 0;
-						} );
-
-						const responses: any[] = [];
-
-						for ( const part of toolCalls ) {
-							const call = part.functionCall;
-							const fnName = call.name;
-							const args = call.args || {};
-							let res: any = null;
-
-							updateStep(
-								sprintf(
-									__( 'Executing tool: %s...', 'ai' ),
-									fnName
-								)
-							);
-
-							addMessage(
-								createMessage(
-									'assistant',
-									'text',
-									sprintf(
-										/* translators: 1: tool name, 2: JSON arguments */
-										__(
-											'<strong>🛠 Executing tool:</strong> <code>%1$s</code>',
-											'ai'
-										),
-										fnName
-									)
-								)
-							);
-
-							try {
-								if ( fnName === 'discover_abilities' ) {
-									res = await api.discoverAbilities();
-								} else if ( fnName === 'execute_ability' ) {
-									res = await api.executeAbility(
-										args.name as string,
-										args.input
-									);
-								} else if ( fnName === 'write_file' ) {
-									const existingIndex = newFiles.findIndex(
-										( f ) => f.path === args.path
-									);
-									if ( existingIndex >= 0 ) {
-										newFiles[ existingIndex ].content =
-											args.content as string;
-									} else {
-										const filePath = args.path as string;
-										const planFile = plan?.files?.find(
-											( f: any ) => f.path === filePath
-										);
-										let fileType = planFile?.type;
-
-										if ( ! fileType ) {
-											const ext = filePath
-												.split( '.' )
-												.pop()
-												?.toLowerCase();
-											switch ( ext ) {
-												case 'php':
-													fileType = 'php';
-													break;
-												case 'js':
-													fileType = 'javascript';
-													break;
-												case 'ts':
-													fileType = 'typescript';
-													break;
-												case 'css':
-													fileType = 'css';
-													break;
-												case 'json':
-													fileType = 'json';
-													break;
-												case 'md':
-													fileType = 'markdown';
-													break;
-												case 'html':
-													fileType = 'html';
-													break;
-												default:
-													fileType = 'text';
-													break;
-											}
-										}
-
-										newFiles.push( {
-											path: filePath,
-											content: args.content as string,
-											type: fileType,
-											description:
-												planFile?.description ||
-												'Generated',
-										} );
-									}
-									setCurrentFiles( [ ...newFiles ] );
-									res = { success: true };
-								} else if ( fnName === 'read_file' ) {
-									const file = newFiles.find(
-										( f ) => f.path === args.path
-									);
-									if ( file ) {
-										res = { content: file.content };
-									} else {
-										res = {
-											error: 'File not found locally. Ensure you have written it first using write_file.',
-										};
-									}
-								} else if ( fnName === 'finish' ) {
-									const finalSlug =
-										args.plugin_slug &&
-										args.plugin_slug.startsWith( 'apb-' )
-											? ( args.plugin_slug as string )
-											: plan.plugin_slug;
-									const writeRes = await api.writeFiles(
-										finalSlug,
-										newFiles,
-										true
-									);
-
-									if (
-										'written' in writeRes &&
-										writeRes.written
-									) {
-										// Successful write; check for any issues reported.
-										if (
-											'issues' in writeRes &&
-											writeRes.issues &&
-											writeRes.issues.length > 0
-										) {
-											res = {
-												success: false,
-												issues: writeRes.issues,
-												instruction:
-													'Fix these issues using write_file and call finish again.',
-											};
-											addMessage(
-												createMessage(
-													'assistant',
-													'text',
-													sprintf(
-														/* translators: %d: number of issues */
-														__(
-															'<strong>Plugin check failed!</strong> Found %d issues. The agent will now attempt to fix them...',
-															'ai'
-														),
-														writeRes.issues.length
-													)
-												)
-											);
-										} else {
-											// Persist the final slug so subsequent operations use the correct plugin.
-											setCurrentPlan( ( prevPlan ) => ( {
-												...prevPlan,
-												plugin_slug: finalSlug,
-											} ) );
-											isFinished = true;
-											res = {
-												success: true,
-												message:
-													'Plugin Generation Complete.',
-											};
-											addMessage(
-												createMessage(
-													'assistant',
-													'text',
-													__(
-														'<strong>Plugin check passed!</strong> All generated files are valid.',
-														'ai'
-													)
-												)
-											);
-										}
-									} else if (
-										needsSlugConfirmation( writeRes )
-									) {
-										// The backend is asking for explicit confirmation or adjustment of the plugin slug.
-										res = {
-											success: false,
-											needsSlugConfirmation: true,
-											instruction:
-												'Confirm the plugin_slug or provide a new, unique slug, then call finish again.',
-										};
-										addMessage(
-											createMessage(
-												'assistant',
-												'text',
-												__(
-													'The plugin slug needs confirmation or adjustment before files can be written.',
-													'ai'
-												)
-											)
-										);
-									} else {
-										// Some other error occurred while trying to write the plugin files.
-										let errorMessage =
-											'Unable to write plugin files. Please review the requested changes and try again.';
-										if (
-											'error' in writeRes &&
-											writeRes.error
-										) {
-											errorMessage = writeRes.error;
-										}
-										res = {
-											success: false,
-											error: errorMessage,
-										};
-										addMessage(
-											createMessage(
-												'assistant',
-												'text',
-												__(
-													'There was an error saving the plugin files. Please try again or adjust your request.',
-													'ai'
-												)
-											)
-										);
-									}
-								} else {
-									res = { error: 'Unknown tool.' };
-								}
-							} catch ( e: any ) {
-								res = {
-									error: e.message || 'Tool execution failed',
-								};
-							}
-
-							responses.push( {
-								channel: 'content',
-								type: 'function_response',
-								functionResponse: {
-									id: call.id,
-									name: fnName,
-									response: res,
-								},
-							} );
-						}
-
-						coderPromptBuilder = coderPromptBuilder.withHistory(
-							modelMessage,
-							{ role: 'user', parts: responses }
-						);
-					} else {
-						// Model stopped without issuing tool calls (and thus without the required 'finish' tool).
-						// Treat this as an error instead of silently marking the run as finished.
-						removeLastLoading();
-						updateStep(
-							__(
-								'The code generation process stopped unexpectedly before completion. Please try again.',
-								'ai'
-							)
-						);
-						setState( 'failed' );
-						return;
-					}
-				}
-
-				// If we exit the generator loop without having successfully called the 'finish' tool,
-				// do not proceed to scan/review; surface an error instead.
-				if ( ! isFinished ) {
-					// If the user aborted, stop quietly without continuing the workflow.
-					if ( abortRef.current ) {
-						removeLastLoading();
-						setState( 'idle' );
-						return;
-					}
-
-					removeLastLoading();
-					updateStep(
-						__(
-							'The generator reached its internal limit before completing the plugin. Please try again.',
-							'ai'
-						)
+				} catch ( e ) {
+					console.error(
+						'Failed to activate plugin in playground:',
+						e
 					);
-					setState( 'failed' );
-					return;
 				}
-				setCurrentFiles( newFiles );
-
-				// Phase 4: Basic Client-Side Security Scan
-				setState( 'reviewing' );
-				updateStep(
-					__( 'Scanning files for security issues...', 'ai' )
-				);
-				const scanResult = scanFiles( newFiles );
-
-				const review: ReviewResult = {
-					passed: scanResult.passed,
-					review_summary: scanResult.passed
-						? __( 'No obvious dangerous patterns found.', 'ai' )
-						: __(
-								'Dangerous patterns detected in generated code.',
-								'ai'
-						  ),
-					suggestions: scanResult.issues.map( ( iss ) => ( {
-						action: 'Needs Review',
-						file_path: iss.file_path,
-						file_type: 'php',
-						reason: 'Pattern match',
-						description: `Matched dangerous pattern \`${ iss.pattern }\` on line ${ iss.line }: \`${ iss.line_content }\``,
-					} ) ),
-				};
-				setCurrentReview( review );
-
-				// Finish
-				removeLastLoading();
-				addMessage(
-					createMessage( 'assistant', 'review', '', review )
-				);
-				addMessage(
-					createMessage(
-						'assistant',
-						'files',
-						__( "Here's the generated code:", 'ai' ),
-						newFiles
-					)
-				);
-
-				setState( 'ready_to_install' );
-				log(
-					'success',
-					sprintf(
-						/* translators: %s: elapsed time */
-						__( 'Done in %s', 'ai' ),
-						elapsed()
-					),
-					__( 'Ready to install', 'ai' )
-				);
-				void performChatSave( plan.plugin_slug );
-			} catch ( e: any ) {
-				handleError(
-					e.message ||
-						__( 'Failed during AI generation pipeline.', 'ai' )
-				);
-				void performChatSave( currentPlan?.plugin_slug );
 			}
-		},
-		[
-			addMessage,
-			currentFiles,
-			currentPlan,
-			handleError,
-			log,
-			removeLastLoading,
-			updateStep,
-			elapsed,
-			performChatSave,
-		]
-	);
 
-	const installPlugin = useCallback(
-		async ( force: boolean = false, activate: boolean = true ) => {
-			if ( ! currentPlan || ! currentFiles.length ) return;
-
-			const isUpdate = messagesRef.current.some(
-				( m ) => m.type === 'install' && m.data?.activated
-			);
-			const _force = force || isUpdate;
-
-			setState( 'installing' );
-			setSlugConflictWarnings( [] );
-			addMessage(
-				createMessage(
-					'assistant',
-					'loading',
-					isUpdate
-						? __( 'Updating plugin files...', 'ai' )
-						: activate
-							? __( 'Saving and activating plugin...', 'ai' )
-							: __( 'Saving plugin...', 'ai' )
-				)
-			);
-			log(
-				'info',
-				sprintf(
-					/* translators: %s: plugin slug */
-					__( 'Saving: %s', 'ai' ),
-					currentPlan.plugin_slug
-				) + ( _force ? sprintf( ' (%s)', __( 'forced', 'ai' ) ) : '' )
-			);
-
-			try {
-				const result = await api.writeFiles(
-					currentPlan.plugin_slug,
-					currentFiles,
-					_force
-				);
-
-				if ( needsSlugConfirmation( result ) ) {
-					removeLastLoading();
-					setSlugConflictWarnings( result.warnings );
-					setState( 'ready_to_install' );
-					addMessage(
-						createMessage(
-							'assistant',
-							'text',
-							sprintf(
-								/* translators: %s: warning messages */
-								__(
-									'<strong>Warning:</strong> %s\n\nClick "Install Anyway" to proceed.',
-									'ai'
-								),
-								result.warnings.join( ' ' )
-							)
-						)
-					);
-					log(
-						'warn',
-						__( 'Slug conflict detected', 'ai' ),
-						result.warnings.join( '; ' )
-					);
-					return;
-				}
-
-				if ( 'written' in result && result.written ) {
-					const pluginFile = result.plugin;
-					setInstalledPluginFile(
-						pluginFile.endsWith( '.php' )
-							? pluginFile
-							: pluginFile + '.php'
-					);
-
+			if ( suggestedCommand && iframeRef?.current ) {
+				setTimeout( () => {
 					try {
-						if ( ! isUpdate ) {
-							if ( activate ) {
-								updateStep( __( 'Activating plugin...', 'ai' ) );
-								await api.activatePlugin( pluginFile );
-							}
-							removeLastLoading();
-							setState( 'installed' );
-							addMessage(
-								createMessage( 'assistant', 'install', '', {
-									installed: true,
-									activated: activate,
-									plugin: pluginFile,
-									plugin_name: currentPlan.plugin_name,
-								} )
-							);
-							log(
-								'success',
-								activate
-									? 'Plugin installed & activated'
-									: 'Plugin installed',
-								pluginFile
-							);
-						} else {
-							removeLastLoading();
-							setState( 'idle' );
-							addMessage(
-								createMessage(
-									'assistant',
-									'install',
-									__( 'Plugin files updated!', 'ai' ),
-									{
-										installed: true,
-										activated: true,
-										plugin: pluginFile,
-										isUpdate: true,
-									}
-								)
-							);
-							log(
-								'success',
-								'Plugin files updated locally',
-								pluginFile
-							);
-						}
-
-						// New Analysis Phase
-						addMessage(
-							createMessage(
-								'assistant',
-								'loading',
-								__( 'Analyzing next steps...', 'ai' )
-							)
-						);
-						updateStep( __( 'Checking plugin features...', 'ai' ) );
-
-						try {
-							if ( abortRef.current ) return;
-
-							const existingCommands = select( commandsStore )
-								.getCommands()
-								.map( ( c: any ) => ( {
-									name: c.name,
-									label: c.label,
-								} ) );
-
-							const analyzerText = await window.wp.aiClient
-								.prompt(
-									getAnalyzerPrompt(
-										currentFiles,
-										existingCommands
-									)
-								)
-								.usingSystemInstruction(
-									getSystemPrompt( 'analyzer' )
-								)
-								.usingTemperature( 0.2 )
-								.usingMaxTokens( 8000 )
-								.asJsonResponse()
-								.generateText();
-
-							const analysis: AnalysisResponse =
-								parseJSON( analyzerText );
-							if (
-								analysis.new_commands &&
-								analysis.new_commands.length > 0
-							) {
-								for ( const cmd of analysis.new_commands ) {
-									dispatch( commandsStore ).registerCommand( {
-										name: cmd.name,
-										label: cmd.label,
-										callback: ( {
-											close,
-										}: {
-											close?: () => void;
-										} ) => {
-											document.location.href = cmd.url;
-											if ( close ) close();
-										},
-									} );
-								}
-							}
-
-							const updatedCommands =
-								select( commandsStore ).getCommands();
-
-							removeLastLoading();
-							addMessage(
-								createMessage( 'assistant', 'analysis', '', {
-									plugin_name: currentPlan.plugin_name,
-									plugin_slug: currentPlan.plugin_slug,
-									explanation: analysis.explanation,
-									new_commands: analysis.new_commands || [],
-									suggested_commands:
-										analysis.suggested_commands || [],
-									all_commands: updatedCommands,
-								} )
-							);
-							log(
-								'success',
-								__(
-									'Analysis complete. Suggested next steps generated.',
-									'ai'
-								)
-							);
-						} catch ( analysisErr: any ) {
-							removeLastLoading();
-							console.error( 'Analysis failed:', analysisErr );
-							addMessage(
-								createMessage(
-									'assistant',
-									'text',
-									sprintf(
-										/* translators: %s: error message */
-										__(
-											'<strong>Analysis Error:</strong> %s\n\nCheck browser console for details.',
-											'ai'
-										),
-										analysisErr.message
-									)
-								)
-							);
-							log(
-								'warn',
-								__( 'Failed to analyze next steps', 'ai' ),
-								analysisErr.message
-							);
-						}
-					} catch ( activationError: any ) {
-						removeLastLoading();
-						setState( 'installed' );
-						let msg =
-							activationError.message ||
-							__( 'Failed to activate the plugin.', 'ai' );
-
-						let additionalData =
-							activationError.data?.additional_data ||
-							activationError.additional_data ||
-							'';
-						if ( additionalData ) {
-							if ( Array.isArray( additionalData ) ) {
-								additionalData = additionalData.join( '\n' );
-							} else if ( typeof additionalData === 'object' ) {
-								additionalData = JSON.stringify(
-									additionalData,
-									null,
-									2
+						// 1. Try to execute inside the iframe's native command palette
+						const win = iframeRef.current.contentWindow as any;
+						if ( win && win.wp && win.wp.data ) {
+							const iframeStore =
+								win.wp.data.select( 'core/commands' );
+							if ( iframeStore ) {
+								const iframeCmds = iframeStore.getCommands();
+								const cmdObj = iframeCmds.find(
+									( c: any ) => c.name === suggestedCommand
 								);
+								if ( cmdObj && cmdObj.callback ) {
+									console.log(
+										'Executing mapped core command inside Playground iframe:',
+										suggestedCommand
+									);
+									cmdObj.callback( { close: () => {} } );
+									return;
+								}
 							}
-							// The UI will likely render this error string.
-							msg += `\n\n${ __(
-								'Additional Data:',
-								'ai'
-							) }\n${ additionalData }\n`;
 						}
 
-						addMessage(
-							createMessage( 'assistant', 'install', '', {
-								installed: true,
-								activated: false,
-								plugin: pluginFile,
-								plugin_name: currentPlan.plugin_name,
-								error: msg,
-							} )
-						);
-						log(
-							'warn',
-							__( 'Plugin installed (activation failed)', 'ai' ),
-							msg
-						);
-					}
-				} else if ( 'error' in result ) {
-					removeLastLoading();
-					handleError( result.error );
-				}
-			} catch ( e: any ) {
-				removeLastLoading();
-				const msg =
-					e.message || __( 'Failed to save plugin files', 'ai' );
-				handleError( msg );
-			} finally {
-				void performChatSave( currentPlan.plugin_slug );
-			}
-		},
-		[
-			addMessage,
-			currentFiles,
-			currentPlan,
-			handleError,
-			log,
-			removeLastLoading,
-			updateStep,
-			performChatSave,
-		]
-	);
-
-	const forceInstallPlugin = useCallback( () => {
-		void installPlugin( true );
-	}, [ installPlugin ] );
-
-	const downloadPlugin = useCallback( async () => {
-		if ( ! currentPlan || ! currentFiles.length ) return;
-
-		await api.downloadPlugin( currentPlan.plugin_slug, currentFiles );
-		log(
-			'success',
-			__( 'Plugin downloaded', 'ai' ),
-			currentPlan.plugin_slug
-		);
-	}, [ currentPlan, currentFiles, log ] );
-
-	const reset = useCallback( () => {
-		abortRef.current = false;
-		setState( 'idle' );
-		setMessages( [] );
-		messagesRef.current = [];
-		setLogs( [] );
-		setCurrentPlan( null );
-		setCurrentFiles( [] );
-		setCurrentReview( null );
-		setCurrentStep( '' );
-		setError( null );
-		resetTokenUsage();
-		startTimeRef.current = 0;
-		setInstalledPluginFile( null );
-		setSlugConflictWarnings( [] );
-		setActiveChatId( null );
-		activeChatIdRef.current = null;
-		setChatTitle( '' );
-		chatTitleRef.current = '';
-		messageIdCounter = 0;
-		logIdCounter = 0;
-	}, [ setActiveChatId, setChatTitle ] );
-
-	const loadChat = useCallback(
-		async ( chat: ChatHistory ) => {
-			reset();
-			setActiveChatId( chat.id || null );
-			activeChatIdRef.current = chat.id || null;
-			setChatTitle( chat.title || '' );
-			if ( chat.messages && chat.messages.length > 0 ) {
-				setMessages( chat.messages );
-				messagesRef.current = chat.messages;
-				const installMessage = chat.messages
-					.slice()
-					.reverse()
-					.find( ( m ) => m.type === 'install' && m.data?.activated );
-				const isInstalledLocally = !! installMessage;
-				setState( isInstalledLocally ? 'idle' : 'ready_to_install' );
-				if ( installMessage?.data?.plugin ) {
-					const pf = installMessage.data.plugin as string;
-					setInstalledPluginFile(
-						pf.endsWith( '.php' ) ? pf : pf + '.php'
-					);
-				}
-
-				const lastPlan = chat.messages
-					.slice()
-					.reverse()
-					.find( ( m ) => m.type === 'plan' );
-				if ( lastPlan && lastPlan.data ) {
-					setCurrentPlan( lastPlan.data as PluginPlan );
-				}
-
-				// If installed, attempt to load physical files from local server.
-				if ( chat.plugin_slug && isInstalledLocally ) {
-					try {
-						const localFilesResponse = await api.getPluginFiles(
-							chat.plugin_slug
-						);
+						// 2. Fallback for newly generated commands that only exist in our local Builder memory trace
+						const analysisMsg = [ ...builderState.messages ]
+							.reverse()
+							.find( ( m: any ) => m.type === 'analysis' );
 						if (
-							localFilesResponse &&
-							localFilesResponse.files &&
-							localFilesResponse.files.length > 0
+							analysisMsg &&
+							analysisMsg.data &&
+							analysisMsg.data.new_commands
 						) {
-							setCurrentFiles( localFilesResponse.files );
-						} else {
-							const lastFiles = chat.messages
-								.slice()
-								.reverse()
-								.find( ( m ) => m.type === 'files' );
-							if ( lastFiles && lastFiles.data ) {
-								setCurrentFiles(
-									lastFiles.data as GeneratedFile[]
+							const fallbackCmd =
+								analysisMsg.data.new_commands.find(
+									( c: any ) => c.name === suggestedCommand
 								);
+							if ( fallbackCmd && fallbackCmd.url ) {
+								console.log(
+									'Redirecting Playground iframe to dynamically registered plugin route:',
+									fallbackCmd.url
+								);
+								const targetUrl = fallbackCmd.url.startsWith(
+									'/'
+								)
+									? fallbackCmd.url
+									: '/wp-admin/' + fallbackCmd.url;
+								playground.getClient()?.goTo( targetUrl );
 							}
 						}
 					} catch ( e ) {
 						console.error(
-							'Failed to fetch physical files synchronously, falling back to history',
+							'Failed to execute command inside playground iframe:',
 							e
 						);
-						const lastFiles = chat.messages
-							.slice()
-							.reverse()
-							.find( ( m ) => m.type === 'files' );
-						if ( lastFiles && lastFiles.data ) {
-							setCurrentFiles(
-								lastFiles.data as GeneratedFile[]
-							);
-						}
 					}
-				} else {
-					const lastFiles = chat.messages
-						.slice()
-						.reverse()
-						.find( ( m ) => m.type === 'files' );
-					if ( lastFiles && lastFiles.data ) {
-						setCurrentFiles( lastFiles.data as GeneratedFile[] );
-					}
-				}
-
-				const lastReview = chat.messages
-					.slice()
-					.reverse()
-					.find( ( m ) => m.type === 'review' );
-				if ( lastReview && lastReview.data ) {
-					setCurrentReview( lastReview.data as ReviewResult );
-				}
+				}, 1000 );
 			}
 		},
-		[ reset, setActiveChatId, setChatTitle ]
+		[
+			setShowPreview,
+			builderState.currentPlan,
+			playground,
+			iframeRef,
+			builderState.messages,
+		]
 	);
 
-	const isProcessing = useMemo(
-		() =>
-			[
-				'planning',
-				'coding',
-				'reviewing',
-				'fixing',
-				'installing',
-			].includes( state ),
-		[ state ]
-	);
-
-	const hasSlugConflict = useMemo(
-		() => slugConflictWarnings.length > 0,
-		[ slugConflictWarnings ]
-	);
-
-	const isInstalled = useMemo( () => state === 'installed', [ state ] );
+	// Aggregate and Export the Unified Interface
+	const isProcessing = [
+		'planning',
+		'coding',
+		'reviewing',
+		'installing',
+	].includes( builderState.state );
 
 	return {
-		state,
-		messages,
-		logs,
-		currentPlan,
-		currentFiles,
-		currentReview,
-		currentStep,
-		error,
-		tokenUsage,
+		state: builderState.state,
+		messages: builderState.messages,
+		logs: builderState.logs,
+		currentPlan: builderState.currentPlan,
+		currentFiles: builderState.currentFiles,
+		currentReview: builderState.currentReview,
+		currentStep: builderState.currentStep,
+		error: builderState.error,
+		tokenUsage: builderState.tokenUsage,
+		installedPluginFile: builderState.installedPluginFile,
+		slugConflictWarnings: builderState.slugConflictWarnings,
+		activeChatId: builderState.activeChatId,
+		chatTitle: builderState._chatTitle,
+
+		hasSlugConflict: builderState.slugConflictWarnings.length > 0,
 		isProcessing,
-		hasSlugConflict,
-		isInstalled,
-		installedPluginFile,
-		slugConflictWarnings,
-		activeChatId,
-		sendDescription,
-		installPlugin,
-		forceInstallPlugin,
-		downloadPlugin,
-		reset,
-		loadChat,
-		cancelGeneration,
+
+		reset: builderState.reset,
+		loadChat: useCallback(
+			async ( chat: any ) => {
+				chatSync.loadChat( chat );
+				const lastPlan = chat.messages
+					.filter( ( m: any ) => m.type === 'plan' )
+					.pop();
+				const lastFiles = chat.messages
+					.filter( ( m: any ) => m.type === 'files' )
+					.pop();
+
+				if ( lastPlan?.data?.plugin_slug && lastFiles?.data?.length ) {
+					const slug = lastPlan.data.plugin_slug;
+					const files = lastFiles.data;
+
+					try {
+						await playground.bootPlayground();
+						await playground.writePluginFiles( slug, files );
+
+						const client = playground.getClient();
+						if ( client ) {
+							await activatePlugin( client, {
+								pluginName: slug,
+								pluginPath: `/wordpress/wp-content/plugins/${ slug }`,
+							} );
+						}
+					} catch ( e ) {
+						console.error(
+							'Failed to mount historical plugin chat cleanly into Playground:',
+							e
+						);
+					}
+				}
+			},
+			[ chatSync.loadChat, playground ]
+		),
+		cancelGeneration: codeGenerator.cancelGeneration,
+		sendDescription: codeGenerator.sendDescription,
+		installPlugin: pluginInstaller.installPlugin,
+		forceInstallPlugin: pluginInstaller.forceInstallPlugin,
+		downloadPlugin: pluginInstaller.downloadPlugin,
+		previewInPlayground,
 	};
 }
