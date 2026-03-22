@@ -661,7 +661,7 @@ export default function App() {
 											<div className="apb-bubble apb-bubble--error">
 												<span className="apb-bubble__icon">
 													❌
-												</span>
+												</span>{ ' ' }
 												{ msg.content }
 											</div>
 										) }
