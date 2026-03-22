@@ -31,7 +31,8 @@ export default function App() {
 		loadChat,
 		tokenUsage,
 		cancelGeneration,
-	} = usePluginBuilder( iframeRef );
+		previewInPlayground,
+	} = usePluginBuilder( iframeRef, setShowPreview );
 
 	const [ input, setInput ] = useState( '' );
 	const [ recentChats, setRecentChats ] = useState< ChatHistory[] >( [] );
@@ -131,7 +132,7 @@ export default function App() {
 							installedPluginFile={ installedPluginFile }
 							forceInstallPlugin={ forceInstallPlugin }
 							downloadPlugin={ downloadPlugin }
-							setShowPreview={ setShowPreview }
+							previewInPlayground={ previewInPlayground }
 						/>
 					) }
 

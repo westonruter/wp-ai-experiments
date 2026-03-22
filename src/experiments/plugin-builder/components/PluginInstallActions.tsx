@@ -9,7 +9,7 @@ interface PluginInstallActionsProps {
 	installedPluginFile: string | null;
 	forceInstallPlugin: () => void;
 	downloadPlugin: () => void;
-	setShowPreview: ( show: boolean ) => void;
+	previewInPlayground: ( cmd?: string ) => void;
 }
 
 export function PluginInstallActions( {
@@ -20,7 +20,7 @@ export function PluginInstallActions( {
 	installedPluginFile,
 	forceInstallPlugin,
 	downloadPlugin,
-	setShowPreview,
+	previewInPlayground,
 }: PluginInstallActionsProps ) {
 	const msgIndex = messages.indexOf( msg );
 	const subsequentMessages = messages.slice( msgIndex );
@@ -32,6 +32,16 @@ export function PluginInstallActions( {
 	const hasActivatedPrior = priorMessages.some(
 		( m ) => m.type === 'install' && m.data?.activated
 	);
+
+	const lastAnalysisMsg = [ ...messages ]
+		.reverse()
+		.find(
+			( m ) =>
+				m.type === 'analysis' && m.data?.suggested_commands?.length > 0
+		);
+	const suggestedCommand = lastAnalysisMsg
+		? lastAnalysisMsg.data.suggested_commands[ 0 ]
+		: undefined;
 
 	return (
 		<div className="apb-actions" style={ { marginTop: '10px' } }>
@@ -67,7 +77,7 @@ export function PluginInstallActions( {
 			</button>
 			<button
 				className="button button-secondary"
-				onClick={ () => setShowPreview( true ) }
+				onClick={ () => previewInPlayground( suggestedCommand ) }
 				disabled={
 					isProcessing ||
 					( state !== 'installed' && state !== 'ready_to_install' )

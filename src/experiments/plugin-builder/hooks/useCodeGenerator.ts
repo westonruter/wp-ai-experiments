@@ -3,8 +3,16 @@ import { __, sprintf } from '@wordpress/i18n';
 import { PluginPlan, GeneratedFile } from '../types';
 import * as api from '../api';
 import { Bash, InMemoryFs } from 'just-bash';
-import { getSystemPrompt, getIntentPrompt, getPlannerPrompt } from '../prompts';
+import { select, dispatch } from '@wordpress/data';
+import { store as commandsStore } from '@wordpress/commands';
+import {
+	getSystemPrompt,
+	getIntentPrompt,
+	getPlannerPrompt,
+	getAnalyzerPrompt,
+} from '../prompts';
 import { createMessage } from './useBuilderState';
+import { logAgentTurn, logAgentToolResponse } from '../utils/console-logger';
 
 export const AVAILABLE_TOOLS = [
 	{
@@ -61,6 +69,27 @@ export const AVAILABLE_TOOLS = [
 		},
 	},
 	{
+		name: 'run_lint',
+		description:
+			'Runs the WP-CLI plugin check on your generated plugin. Use this to find and fix PHP syntax errors or structural issues before finishing.',
+	},
+	{
+		name: 'test_url_content',
+		description:
+			'Navigates to a specific URL in the WordPress Playground and captures the rendered HTML text and an iframe screenshot (base64 image). Use this to test if your frontend features or settings pages displayed correctly.',
+		parameters: {
+			type: 'object',
+			properties: {
+				url: {
+					type: 'string',
+					description:
+						'The absolute URL path starting from the site root (e.g., /wp-admin/options-general.php?page=my-plugin)',
+				},
+			},
+			required: [ 'url' ],
+		},
+	},
+	{
 		name: 'read_file',
 		description: 'Reads a previously generated file from the plugin.',
 		parameters: {
@@ -92,6 +121,93 @@ export const AVAILABLE_TOOLS = [
 						'Override the planned slug if a conflict was detected. Must start with apb-',
 				},
 			},
+		},
+	},
+	{
+		name: 'replace_file_content',
+		description:
+			'Editing surgically: Replaces a specific chunk of text in a local file with new text.',
+		parameters: {
+			type: 'object',
+			properties: {
+				path: {
+					type: 'string',
+					description: 'Path to the local file to edit',
+				},
+				target: {
+					type: 'string',
+					description:
+						'The exact exact string you want to remove/replace from the file',
+				},
+				replacement: {
+					type: 'string',
+					description: 'The new string to drop in its place',
+				},
+			},
+			required: [ 'path', 'target', 'replacement' ],
+		},
+	},
+	{
+		name: 'run_wp_cli',
+		description:
+			'Runs WP-CLI commands natively in the WP Playground runtime. E.g. wp post list, wp rewrite flush. DO NOT prepend wp, just pass the arguments.',
+		parameters: {
+			type: 'object',
+			properties: {
+				command: {
+					type: 'string',
+					description:
+						'The WP-CLI arguments to evaluate (e.g. `eval "echo hello; "`)',
+				},
+			},
+			required: [ 'command' ],
+		},
+	},
+	{
+		name: 'read_playground_file',
+		description:
+			'Reads active files directly from the sandboxed WP instance (e.g., viewing standard wp-config.php or active theme templates).',
+		parameters: {
+			type: 'object',
+			properties: {
+				path: {
+					type: 'string',
+					description:
+						'Absolute path starting with /wordpress/wp-content/ etc.',
+				},
+			},
+			required: [ 'path' ],
+		},
+	},
+	{
+		name: 'list_playground_dir',
+		description:
+			'Lists folder contents dynamically from the sandboxed WP environment.',
+		parameters: {
+			type: 'object',
+			properties: {
+				path: {
+					type: 'string',
+					description: 'Absolute tracking path inside playground.',
+				},
+			},
+			required: [ 'path' ],
+		},
+	},
+	{
+		name: 'search_wp_docs',
+		description:
+			'Performs Google Search Document Grounding across developer.wordpress.org directly to pull block API specifications or core hook references asynchronously.',
+		parameters: {
+			type: 'object',
+			properties: {
+				query: {
+					type: 'string',
+					description:
+						'What to query Google for (e.g. "register_block_type block.json example wp 6.5")',
+				},
+			},
+			required: [ 'query' ],
 		},
 	},
 ];
@@ -134,6 +250,11 @@ export function useCodeGenerator(
 		bootPlayground,
 		getClient: getPlaygroundClient,
 		writePluginFiles,
+		runPluginCheck,
+		testUrlContent,
+		runWpCli,
+		readPlaygroundFile,
+		listPlaygroundDir,
 	} = playground;
 	const { evaluateAndFix } = reviewAgent;
 
@@ -337,7 +458,7 @@ export function useCodeGenerator(
 				const systemPrompt = `You are an expert autonomous WordPress developer. You have been given a plan to build a plugin.
 Your goal is to write all the files necessary according to the plan.
 It is HIGHLY recommended to use the \`discover_abilities\` tool right at the beginning before writing any code to gain additional context and guidance on available WP features.
-You must use the write_file tool to write each file. Alternatively, you can use the run_bash tool to execute bash commands, including curl or npm, which can write to your local filesystem natively.
+You must use the write_file tool to write each file. Alternatively, you can use the run_bash tool to execute unix bash commands. Note that the Bash environment does NOT have \`npm\`. Instead, \`run_bash\` is incredibly powerful for scaffolding nested folders (\`mkdir -p admin/css\`), rapidly creating placeholder files (\`touch file.php\`), fetching external library resources (\`curl -o lib.js https...\`), and managing state natively across the filesystem. 
 You must use the list_plugins tool to verify the planned plugin slug is NOT already taken. If it is taken, pick a new descriptive slug prefixed with \`apb-\`.
 When you are completely finished writing all the code, you MUST call the finish tool and optionally pass the new slug if it changed.
 IMPORTANT: You MUST NOT call the finish tool in the same turn alongside other tools. Call it ALONE in a subsequent turn.
@@ -358,7 +479,7 @@ Do not stop until you have called finish.`;
 
 				let isFinished = false;
 				let turnCount = 0;
-				const maxTurns = 10;
+				const maxTurns = 100;
 
 				while (
 					! isFinished &&
@@ -384,6 +505,7 @@ Do not stop until you have called finish.`;
 					);
 
 					const candidate = result.candidates[ 0 ];
+					logAgentTurn( turnCount, candidate );
 					if (
 						candidate.message &&
 						Array.isArray( candidate.message.parts )
@@ -528,13 +650,179 @@ Do not stop until you have called finish.`;
 										message:
 											'Plugin Generation Complete. Proceeding to Playground WP-CLI Review.',
 									};
+								} else if ( fnName === 'run_lint' ) {
+									const slug =
+										plan?.plugin_slug || 'plugin-builder';
+
+									// We must flush the in-memory files down to WP Playground before linting
+									const currentPaths =
+										sessionFs.getAllPaths();
+									const targetDir = `/home/user/${ slug }/`;
+									const playgroundFiles = [];
+									for ( const p of currentPaths ) {
+										if ( ! p.startsWith( targetDir ) ) {
+											continue;
+										}
+										try {
+											const stat =
+												await sessionFs.stat( p );
+											if ( stat.isDirectory ) {
+												continue;
+											}
+											const content =
+												await sessionFs.readFile( p );
+											playgroundFiles.push( {
+												path: `${ slug }/${ p.replace(
+													targetDir,
+													''
+												) }`,
+												content,
+												type: 'text',
+											} );
+										} catch ( e ) {}
+									}
+
+									// Ensure the playground is booted
+									await bootPlayground();
+									if ( playgroundFiles.length > 0 ) {
+										await writePluginFiles(
+											playgroundFiles
+										);
+									}
+
+									const lintOutput =
+										await runPluginCheck( slug );
+									res = { output: lintOutput };
+								} else if ( fnName === 'search_wp_docs' ) {
+									updateStep(
+										__(
+											'Searching WordPress Documentation…',
+											'ai'
+										)
+									);
+									const query = args.query as string;
+									try {
+										// We instantiate a separate pure, fresh client strictly for searching
+										// This bypasses the API constraint of combining function declarations and web_search inside a single request.
+										const searchClient = (
+											window as any
+										 ).wp.aiClient
+											.prompt(
+												`Search the WordPress developer documentation and answer concisely with up-to-date engineering specs for the following query:\n\n${ query }`
+											)
+											.usingWebSearch( {
+												allowedDomains: [
+													'developer.wordpress.org',
+												],
+											} );
+										const searchRes =
+											await searchClient.generateResult();
+										res = {
+											success: true,
+											result: searchRes.text,
+										};
+									} catch ( e: any ) {
+										res = {
+											error:
+												'Search failed: ' + e.message,
+										};
+									}
+								} else if ( fnName === 'test_url_content' ) {
+									await bootPlayground();
+									const testOutput = await testUrlContent(
+										( args.url as string ) || '/'
+									);
+									res = testOutput;
+								} else if ( fnName === 'run_wp_cli' ) {
+									await bootPlayground();
+									const cliOutput = await runWpCli(
+										args.command as string
+									);
+									res = { output: cliOutput };
+								} else if (
+									fnName === 'read_playground_file'
+								) {
+									await bootPlayground();
+									const fileOutput = await readPlaygroundFile(
+										args.path as string
+									);
+									if (
+										typeof fileOutput === 'object' &&
+										fileOutput.error
+									) {
+										res = fileOutput;
+									} else {
+										res = { content: fileOutput };
+									}
+								} else if ( fnName === 'list_playground_dir' ) {
+									await bootPlayground();
+									const dirOutput = await listPlaygroundDir(
+										args.path as string
+									);
+									if (
+										typeof dirOutput === 'object' &&
+										dirOutput.error
+									) {
+										res = dirOutput;
+									} else {
+										res = { files: dirOutput };
+									}
+								} else if (
+									fnName === 'replace_file_content'
+								) {
+									const slug =
+										plan?.plugin_slug || 'plugin-builder';
+									let filePath = args.path as string;
+									if ( ! filePath.startsWith( '/' ) ) {
+										filePath = `/home/user/${ slug }/${ filePath }`;
+									}
+									try {
+										const target = args.target as string;
+										const replacement =
+											args.replacement as string;
+										const originalContent =
+											( await sessionFs.readFile(
+												filePath
+											) ) as string;
+										if (
+											! originalContent.includes( target )
+										) {
+											res = {
+												error: 'The target text chunk was not found exactly within the file. Ensure you pass the exact characters.',
+											};
+										} else {
+											const updatedContent =
+												originalContent.replace(
+													target,
+													replacement
+												);
+											await sessionFs.writeFile(
+												filePath,
+												updatedContent
+											);
+											res = {
+												success: true,
+												message:
+													'File chunk replaced successfully.',
+											};
+										}
+									} catch ( e: any ) {
+										res = {
+											error:
+												'Failed to replace file content: ' +
+												e.message,
+										};
+									}
 								} else {
 									res = { error: 'Unknown tool.' };
 								}
+
+								logAgentToolResponse( fnName, res );
 							} catch ( e: any ) {
 								res = {
 									error: e.message || 'Tool execution failed',
 								};
+								logAgentToolResponse( fnName, res );
 							}
 
 							responses.push( {
@@ -719,9 +1007,82 @@ Do not stop until you have called finish.`;
 						'assistant',
 						'files',
 						__( "Here's the generated code:", 'ai' ),
-						currentFiles
+						files
 					)
 				);
+
+				updateStep( __( 'Analyzing plugin features...', 'ai' ) );
+				try {
+					const existingCommands = select( commandsStore )
+						.getCommands()
+						.map( ( c: any ) => ( {
+							name: c.name,
+							label: c.label,
+						} ) );
+
+					const analyzerText = await ( window as any ).wp.aiClient
+						.prompt( getAnalyzerPrompt( files, existingCommands ) )
+						.usingSystemInstruction( getSystemPrompt( 'analyzer' ) )
+						.usingTemperature( 0.2 )
+						.usingMaxTokens( 8000 )
+						.asJsonResponse()
+						.generateText();
+
+					const analysis: any = JSON.parse( analyzerText );
+					if (
+						analysis.new_commands &&
+						analysis.new_commands.length > 0
+					) {
+						for ( const cmd of analysis.new_commands ) {
+							dispatch( commandsStore ).registerCommand( {
+								name: cmd.name,
+								label: cmd.label,
+								callback: ( {
+									close,
+								}: {
+									close?: () => void;
+								} ) => {
+									document.location.href = cmd.url;
+									if ( close ) close();
+								},
+							} );
+						}
+					}
+
+					const updatedCommands =
+						select( commandsStore ).getCommands();
+
+					addMessage(
+						createMessage( 'assistant', 'analysis', '', {
+							suggested_commands:
+								analysis.suggested_commands || [],
+							all_commands: updatedCommands,
+							new_commands: analysis.new_commands || [],
+							explanation: analysis.explanation,
+						} )
+					);
+					log(
+						'success',
+						__(
+							'Analysis complete. Suggested next steps generated.',
+							'ai'
+						)
+					);
+				} catch ( analysisErr: any ) {
+					console.error( 'Analysis failed:', analysisErr );
+					addMessage(
+						createMessage(
+							'assistant',
+							'text',
+							`**Analysis Error:** ${ analysisErr.message }\n\nCheck browser console for details.`
+						)
+					);
+					log(
+						'warn',
+						__( 'Failed to analyze next steps', 'ai' ),
+						analysisErr.message
+					);
+				}
 
 				setState( 'ready_to_install' );
 				log(

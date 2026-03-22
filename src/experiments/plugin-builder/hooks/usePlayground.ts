@@ -2,6 +2,8 @@
  * WordPress dependencies
  */
 import { useState, useCallback, useRef } from '@wordpress/element';
+import { ScreenshotSession } from '../utils/screenshot-session';
+import { logBase64Image } from '../utils/console-logger';
 
 /**
  * External dependencies
@@ -16,9 +18,13 @@ import {
 } from '@wp-playground/client';
 // const { startPlaygroundWeb } = await import( 'https://playground.wordpress.net/client/index.js' );
 
-export function usePlayground( iframeRef: any ) {
+export function usePlayground(
+	iframeRef: any,
+	setShowPreview?: ( show: boolean ) => void
+) {
 	const clientRef = useRef< PlaygroundClient | null >( null );
 	const [ isBooting, setIsBooting ] = useState( false );
+	const screenshotSessionRef = useRef( new ScreenshotSession() );
 
 	const bootPlayground = useCallback( async () => {
 		if ( clientRef.current || isBooting ) {
@@ -41,6 +47,10 @@ export function usePlayground( iframeRef: any ) {
 					},
 					extraLibraries: [ 'wp-cli' ],
 					steps: [
+						{
+							step: 'login',
+							username: 'admin',
+						},
 						{
 							step: 'installPlugin',
 							pluginData: {
@@ -76,6 +86,40 @@ export function usePlayground( iframeRef: any ) {
 			await wpClient.goTo( '/wp-admin/' );
 
 			clientRef.current = wpClient;
+
+			// Quick test: Grab a screenshot natively after booting so we can see it in DevTools!
+			/*
+			setTimeout( async () => {
+				if ( iframeRef?.current ) {
+					try {
+						if ( setShowPreview ) {
+							setShowPreview( true );
+						}
+						await new Promise( ( resolve ) =>
+							setTimeout( resolve, 500 )
+						);
+
+						await screenshotSessionRef.current.start();
+						const dataUrl =
+							await screenshotSessionRef.current.capture(
+								iframeRef.current
+							);
+						console.log(
+							'📸 Initial WP Playground Boot Screenshot:'
+						);
+						logBase64Image( dataUrl );
+
+						screenshotSessionRef.current.stop();
+					} catch ( e ) {
+						console.warn(
+							'Failed to test-log initial screenshot',
+							e
+						);
+					}
+				}
+			}, 2500 );
+			*/
+
 			return wpClient;
 		} catch ( e ) {
 			console.error( 'Failed to boot Playground', e );
@@ -167,11 +211,154 @@ export function usePlayground( iframeRef: any ) {
 		}
 	}, [] );
 
+	const testUrlContent = useCallback(
+		async ( urlPath: string ) => {
+			if ( ! clientRef.current ) {
+				throw new Error( 'Playground not booted' );
+			}
+
+			let htmlContent = '';
+			let imageData = '';
+
+			try {
+				console.log( 'Testing URL content for:', urlPath );
+
+				// Fetch raw HTML via the internal request pipeline
+				const response = await clientRef.current.request( {
+					url: urlPath,
+				} );
+				htmlContent = new TextDecoder( 'utf-8' ).decode(
+					response.bytes
+				);
+
+				// Attempt to extract only the main #wpbody-content if possible
+				const bodyMatch = htmlContent.match(
+					/<div id="wpbody-content".*?>([\s\S]*?)<\/div>\s*<div class="clear">/i
+				);
+				if ( bodyMatch && bodyMatch[ 1 ] ) {
+					htmlContent = bodyMatch[ 1 ];
+				} else {
+					// Fallback to body content
+					const fullBody = htmlContent.match(
+						/<body.*?>([\s\S]*?)<\/body>/i
+					);
+					if ( fullBody && fullBody[ 1 ] ) {
+						htmlContent = fullBody[ 1 ];
+					}
+				}
+
+				// Strip excessive scripts/styles but retain HTML tags to save tokens
+				htmlContent = htmlContent
+					.replace(
+						/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi,
+						''
+					)
+					.replace(
+						/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi,
+						''
+					)
+					// .replace( /<\/?[^>]+(>|$)/g, ' ' ) // Keep HTML tags entirely (innerHTML)
+					.replace( /\s{2,}/g, ' ' ) // compress whitespace
+					.trim();
+
+				// Ensure it's not absolutely massive
+				if ( htmlContent.length > 8000 ) {
+					htmlContent =
+						htmlContent.substring( 0, 8000 ) + '...[truncated]';
+				}
+			} catch ( e: any ) {
+				console.error(
+					'Failed to fetch HTML content via WP Playground client',
+					e
+				);
+				htmlContent = 'Error fetching textual HTML: ' + e.message;
+			}
+
+			// Attempt to take a visual snapshot of the iframe
+			/*
+			if ( iframeRef?.current ) {
+				try {
+					if ( setShowPreview ) {
+						setShowPreview( true );
+					}
+					await new Promise( ( resolve ) =>
+						setTimeout( resolve, 500 )
+					);
+
+					await screenshotSessionRef.current.start();
+					imageData = await screenshotSessionRef.current.capture(
+						iframeRef.current
+					);
+
+					screenshotSessionRef.current.stop();
+				} catch ( e ) {
+					console.warn(
+						'Failed to capture screenshot of iframe:',
+						e
+					);
+				}
+			}
+			*/
+
+			return {
+				html: htmlContent,
+				image: imageData || null,
+			};
+		},
+		[ iframeRef ]
+	);
+
+	const runWpCli = useCallback( async ( command: string ) => {
+		if ( ! clientRef.current ) {
+			throw new Error( 'Playground not booted' );
+		}
+		try {
+			const cliPromise = wpCLI( clientRef.current, {
+				command,
+			} );
+			const cliResult = await cliPromise;
+			const stdout = new TextDecoder( 'utf-8' ).decode( cliResult.bytes );
+			const stderr = cliResult.errors;
+			return `WP-CLI Output:\n${ stdout }\n${ stderr }`;
+		} catch ( e: any ) {
+			return { error: e.message || 'WP-CLI failed' };
+		}
+	}, [] );
+
+	const readPlaygroundFile = useCallback( async ( path: string ) => {
+		if ( ! clientRef.current ) {
+			throw new Error( 'Playground not booted' );
+		}
+		try {
+			// We expect WP playground read file to give us a Uint8Array
+			const contentBytes = await clientRef.current.readFile( path );
+			return new TextDecoder( 'utf-8' ).decode( contentBytes );
+		} catch ( e: any ) {
+			return { error: 'Failed to read file: ' + e.message };
+		}
+	}, [] );
+
+	const listPlaygroundDir = useCallback( async ( path: string ) => {
+		if ( ! clientRef.current ) {
+			throw new Error( 'Playground not booted' );
+		}
+		try {
+			const entries = await clientRef.current.listFiles( path );
+			return entries;
+		} catch ( e: any ) {
+			return { error: 'Failed to list directory: ' + e.message };
+		}
+	}, [] );
+
 	return {
 		isBooting,
 		bootPlayground,
 		getClient: () => clientRef.current,
 		writePluginFiles,
 		runPluginCheck,
+		testUrlContent,
+		runWpCli,
+		readPlaygroundFile,
+		listPlaygroundDir,
 	};
 }

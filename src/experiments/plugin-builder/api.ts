@@ -33,6 +33,8 @@ export async function writeFiles(
 
 /**
  * Build a compressed ZIP archive from generated files and trigger a download.
+ * @param pluginSlug
+ * @param files
  */
 export async function downloadPlugin(
 	pluginSlug: string,
@@ -154,9 +156,13 @@ export async function listPlugins(): Promise< any > {
 			path: `/wp/v2/plugins?per_page=${ perPage }&page=${ page }`,
 			method: 'GET',
 		} );
-		if ( ! Array.isArray( pageItems ) || pageItems.length === 0 ) break;
+		if ( ! Array.isArray( pageItems ) || pageItems.length === 0 ) {
+			break;
+		}
 		allPlugins = allPlugins.concat( pageItems );
-		if ( pageItems.length < perPage ) break;
+		if ( pageItems.length < perPage ) {
+			break;
+		}
 		page++;
 	}
 	return allPlugins;

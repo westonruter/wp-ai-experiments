@@ -83,10 +83,10 @@ export function ChatInput( {
 				rows={ 1 }
 			/>
 			<button
-				className={ `apb-chat__send-btn ${ isProcessing ? 'apb-chat__send-btn--stop' : '' }` }
-				disabled={
-					isEnhancing || ( ! isProcessing && ! input.trim() )
-				}
+				className={ `apb-chat__send-btn ${
+					isProcessing ? 'apb-chat__send-btn--stop' : ''
+				}` }
+				disabled={ isEnhancing || ( ! isProcessing && ! input.trim() ) }
 				onClick={ isProcessing ? cancelGeneration : handleSend }
 			>
 				{ isProcessing ? (
@@ -95,14 +95,17 @@ export function ChatInput( {
 					<span className="dashicons dashicons-arrow-up-alt"></span>
 				) }
 				<div className="apb-chat__send-tooltip">
-					{ isProcessing ? __( 'Stop Generation', 'ai' ) : __( 'Press Enter to send, Shift+Enter for new line', 'ai' ) }
+					{ isProcessing
+						? __( 'Stop Generation', 'ai' )
+						: __(
+								'Press Enter to send, Shift+Enter for new line',
+								'ai'
+						  ) }
 				</div>
 			</button>
 			<button
 				className="apb-chat__prompt-tip-icon"
-				disabled={
-					isProcessing || isEnhancing || ! input.trim()
-				}
+				disabled={ isProcessing || isEnhancing || ! input.trim() }
 				onClick={ handleEnhancePrompt }
 				title={ __( 'Enhance prompt with AI', 'ai' ) }
 			>
@@ -110,22 +113,10 @@ export function ChatInput( {
 					{ isEnhancing ? <SmallSpinner /> : <EnhanceIcon /> }
 					<div className="apb-chat__prompt-tip-tooltip">
 						{ [
-							__(
-								'Describe what your plugin should do',
-								'ai'
-							),
-							__(
-								'Mention specific features you need',
-								'ai'
-							),
-							__(
-								'Include where settings should appear',
-								'ai'
-							),
-							__(
-								'Click to enhance your prompt with AI',
-								'ai'
-							),
+							__( 'Describe what your plugin should do', 'ai' ),
+							__( 'Mention specific features you need', 'ai' ),
+							__( 'Include where settings should appear', 'ai' ),
+							__( 'Click to enhance your prompt with AI', 'ai' ),
 						].join( ' \\u2022 ' ) }
 					</div>
 				</span>

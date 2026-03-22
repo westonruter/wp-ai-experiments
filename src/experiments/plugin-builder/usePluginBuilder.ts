@@ -1,4 +1,5 @@
-import { useEffect } from '@wordpress/element';
+import { useEffect, useCallback } from '@wordpress/element';
+import { activatePlugin } from '@wp-playground/client';
 import { usePlayground } from './hooks/usePlayground';
 import { useReviewAgent } from './hooks/useReviewAgent';
 import { useBuilderState } from './hooks/useBuilderState';
@@ -9,7 +10,10 @@ import * as api from './api';
 
 export { AVAILABLE_TOOLS };
 
-export function usePluginBuilder( iframeRef?: any ) {
+export function usePluginBuilder(
+	iframeRef?: any,
+	setShowPreview?: ( show: boolean ) => void
+) {
 	// Initialize core state
 	const builderState = useBuilderState();
 
@@ -28,7 +32,7 @@ export function usePluginBuilder( iframeRef?: any ) {
 	);
 
 	// Initialize Background Workers
-	const playground = usePlayground( iframeRef );
+	const playground = usePlayground( iframeRef, setShowPreview );
 	const reviewAgent = useReviewAgent(
 		playground.getClient,
 		playground.writePluginFiles,
@@ -70,16 +74,104 @@ export function usePluginBuilder( iframeRef?: any ) {
 							chatSync.loadChat( chat );
 						}
 					} )
-					.catch( ( err: any ) =>
+					.catch( ( err: any ) => {
 						builderState.log(
 							'error',
 							'Failed to load chat from URL',
 							err.message
-						)
-					);
+						);
+					} );
 			}
 		}
 	}, [ chatSync.loadChat, builderState.log ] );
+
+	const previewInPlayground = useCallback(
+		async ( suggestedCommand?: string ) => {
+			if ( setShowPreview ) {
+				setShowPreview( true );
+			}
+
+			if ( builderState.currentPlan?.plugin_slug ) {
+				try {
+					const client = playground.getClient();
+					if ( client ) {
+						await activatePlugin( client, {
+							pluginName: builderState.currentPlan.plugin_slug,
+							pluginPath: `/wordpress/wp-content/plugins/${ builderState.currentPlan.plugin_slug }/${ builderState.currentPlan.plugin_slug }`,
+						} );
+					}
+				} catch ( e ) {
+					console.error(
+						'Failed to activate plugin in playground:',
+						e
+					);
+				}
+			}
+
+			if ( suggestedCommand && iframeRef?.current ) {
+				setTimeout( () => {
+					try {
+						// 1. Try to execute inside the iframe's native command palette
+						const win = iframeRef.current.contentWindow as any;
+						if ( win && win.wp && win.wp.data ) {
+							const iframeStore =
+								win.wp.data.select( 'core/commands' );
+							if ( iframeStore ) {
+								const iframeCmds = iframeStore.getCommands();
+								const cmdObj = iframeCmds.find(
+									( c: any ) => c.name === suggestedCommand
+								);
+								if ( cmdObj && cmdObj.callback ) {
+									console.log(
+										'Executing mapped core command inside Playground iframe:',
+										suggestedCommand
+									);
+									cmdObj.callback( { close: () => {} } );
+									return;
+								}
+							}
+						}
+
+						// 2. Fallback for newly generated commands that only exist in our local Builder memory trace
+						const analysisMsg = builderState.messages.find(
+							( m: any ) => m.type === 'analysis'
+						);
+						if (
+							analysisMsg &&
+							analysisMsg.data &&
+							analysisMsg.data.new_commands
+						) {
+							const fallbackCmd =
+								analysisMsg.data.new_commands.find(
+									( c: any ) => c.name === suggestedCommand
+								);
+							if ( fallbackCmd && fallbackCmd.url ) {
+								console.log(
+									'Redirecting Playground iframe to dynamically registered plugin route:',
+									fallbackCmd.url
+								);
+								playground
+									.getClient()
+									?.goTo( '/wp-admin/' + fallbackCmd.url );
+							}
+						}
+					} catch ( e ) {
+						console.error(
+							'Failed to execute command inside playground iframe:',
+							e
+						);
+					}
+				}, 1000 );
+			}
+		},
+		[
+			setShowPreview,
+			builderState.currentPlan,
+			playground,
+			iframeRef,
+			builderState.messages,
+		]
+	);
 
 	// Aggregate and Export the Unified Interface
 	const isProcessing = [
@@ -114,5 +206,6 @@ export function usePluginBuilder( iframeRef?: any ) {
 		installPlugin: pluginInstaller.installPlugin,
 		forceInstallPlugin: pluginInstaller.forceInstallPlugin,
 		downloadPlugin: pluginInstaller.downloadPlugin,
+		previewInPlayground,
 	};
 }

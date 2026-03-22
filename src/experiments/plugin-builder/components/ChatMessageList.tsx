@@ -12,7 +12,7 @@ interface ChatMessageListProps {
 	installedPluginFile: string | null;
 	forceInstallPlugin: () => void;
 	downloadPlugin: () => void;
-	setShowPreview: ( show: boolean ) => void;
+	previewInPlayground: ( cmd?: string ) => void;
 }
 
 export function ChatMessageList( {
@@ -22,7 +22,7 @@ export function ChatMessageList( {
 	installedPluginFile,
 	forceInstallPlugin,
 	downloadPlugin,
-	setShowPreview,
+	previewInPlayground,
 }: ChatMessageListProps ) {
 	const messagesEndRef = useRef< HTMLDivElement >( null );
 
@@ -146,7 +146,9 @@ export function ChatMessageList( {
 											forceInstallPlugin
 										}
 										downloadPlugin={ downloadPlugin }
-										setShowPreview={ setShowPreview }
+										previewInPlayground={
+											previewInPlayground
+										}
 									/>
 								</div>
 							) }
