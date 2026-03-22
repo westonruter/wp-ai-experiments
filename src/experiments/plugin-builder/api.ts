@@ -1,5 +1,6 @@
 import apiFetch from '@wordpress/api-fetch';
 import { __ } from '@wordpress/i18n';
+import JSZip from 'jszip';
 import { WriteResponse, GeneratedFile, ChatHistory } from './types';
 
 declare global {
@@ -30,31 +31,31 @@ export async function writeFiles(
 	} );
 }
 
-export async function downloadPlugin( pluginFile: string ): Promise< void > {
-	const { restUrl, nonce } = window.aiPluginBuilder;
+/**
+ * Build a compressed ZIP archive from generated files and trigger a download.
+ */
+export async function downloadPlugin(
+	pluginSlug: string,
+	files: GeneratedFile[]
+): Promise< void > {
+	const zip = new JSZip();
+	const folder = zip.folder( pluginSlug );
 
-	const url = new URL( `${ restUrl }download` );
-	url.searchParams.set( 'plugin_file', pluginFile );
-
-	const response = await fetch( url.toString(), {
-		method: 'GET',
-		headers: {
-			'X-WP-Nonce': nonce,
-		},
-	} );
-
-	if ( ! response.ok ) {
-		const text = await response.text();
-		throw new Error(
-			text || __( 'Failed to generate ZIP archive.', 'ai' )
-		);
+	if ( folder ) {
+		for ( const file of files ) {
+			folder.file( file.path, file.content );
+		}
 	}
 
-	const blob = await response.blob();
+	const blob = await zip.generateAsync( {
+		type: 'blob',
+		compression: 'DEFLATE',
+		compressionOptions: { level: 9 },
+	} );
+
 	const blobUrl = URL.createObjectURL( blob );
 	const anchor = document.createElement( 'a' );
 	anchor.href = blobUrl;
-	const pluginSlug = pluginFile.split( '/' )[ 0 ];
 	anchor.download = `${ pluginSlug }.zip`;
 	document.body.appendChild( anchor );
 	anchor.click();
@@ -148,25 +149,15 @@ export async function listPlugins(): Promise< any > {
 	let page = 1;
 	let allPlugins: any[] = [];
 
-	// Fetch all pages of plugins until a page returns fewer than perPage items.
 	while ( true ) {
 		const pageItems = await apiFetch< any[] >( {
 			path: `/wp/v2/plugins?per_page=${ perPage }&page=${ page }`,
 			method: 'GET',
 		} );
-
-		if ( ! Array.isArray( pageItems ) || pageItems.length === 0 ) {
-			break;
-		}
-
+		if ( ! Array.isArray( pageItems ) || pageItems.length === 0 ) break;
 		allPlugins = allPlugins.concat( pageItems );
-
-		if ( pageItems.length < perPage ) {
-			break;
-		}
-
+		if ( pageItems.length < perPage ) break;
 		page++;
 	}
-
 	return allPlugins;
 }

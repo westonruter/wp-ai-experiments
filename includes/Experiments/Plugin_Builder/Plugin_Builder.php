@@ -10,6 +10,7 @@ declare( strict_types=1 );
 namespace WordPress\AI\Experiments\Plugin_Builder;
 
 use WordPress\AI\Abilities\Plugin_Builder\Plugin_Prompt_Enhancement;
+use WordPress\AI\Abilities\Plugin_Builder\Get_Installed_Plugins;
 use WordPress\AI\Abstracts\Abstract_Feature;
 use WordPress\AI\Experiments\Experiment_Category;
 use WordPress\AI\Experiments\Plugin_Builder\Rest\DownloadController;
@@ -74,7 +75,6 @@ class Plugin_Builder extends Abstract_Feature {
 				( new WriteController() )->register();
 				( new Rest\ChatHistoryController() )->register();
 				( new Rest\FilesController() )->register();
-				( new DownloadController() )->register();
 			}
 		);
 
@@ -170,6 +170,15 @@ class Plugin_Builder extends Abstract_Feature {
 				'label'         => __( 'Plugin Prompt Enhancement', 'ai' ),
 				'description'   => __( 'Enhances a user\'s plugin description for better AI generation.', 'ai' ),
 				'ability_class' => Plugin_Prompt_Enhancement::class,
+			),
+		);
+
+		wp_register_ability(
+			'ai/get-installed-plugins',
+			array(
+				'label'         => __( 'Get Installed Plugins', 'ai' ),
+				'description'   => __( 'Retrieves a list of installed plugins with their names and descriptions.', 'ai' ),
+				'ability_class' => Get_Installed_Plugins::class,
 			),
 		);
 	}

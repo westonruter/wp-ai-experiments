@@ -446,6 +446,15 @@
 	border-left-color: var(--success-color);
 	color: var(--text-main);
 	font-weight: 500;
+
+	.dashicons-external {
+		font-size: 14px;
+		width: 14px;
+		height: 14px;
+		margin-left: 2px;
+		vertical-align: text-bottom;
+		text-decoration: none;
+	}
 }
 
 .apb-bubble--warning {
@@ -607,6 +616,22 @@
 	background: var(--text-muted);
 	cursor: not-allowed;
 	opacity: 0.5;
+}
+
+.apb-chat__send-btn--stop {
+	background: transparent;
+	border: none;
+
+	&:hover,
+	&:focus {
+		background: transparent;
+		box-shadow: none;
+		transform: none;
+	}
+}
+
+.apb-chat__stop-icon {
+	font-size: 20px;
 }
 
 .apb-chat__enhance-error {
