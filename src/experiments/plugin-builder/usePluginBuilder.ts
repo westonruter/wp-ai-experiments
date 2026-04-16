@@ -461,7 +461,6 @@ export function usePluginBuilder() {
 				const intentPromptBuilder = window.wp.aiClient
 					.prompt( getIntentPrompt( description, previousPlan ) )
 					.usingSystemInstruction( getSystemPrompt( 'detector' ) )
-					.usingTemperature( 0.1 )
 					.usingMaxTokens( 500 )
 					.asJsonResponse();
 
@@ -529,7 +528,6 @@ export function usePluginBuilder() {
 					)
 					.usingSystemInstruction( getSystemPrompt( 'planner' ) )
 					.usingMaxTokens( 16384 )
-					.usingTemperature( 0.3 )
 					.asJsonResponse();
 
 				if ( apiHistory.length > 0 ) {
@@ -661,7 +659,6 @@ export function usePluginBuilder() {
 						) }`
 					)
 					.usingSystemInstruction( systemPrompt )
-					.usingTemperature( 0.2 )
 					.usingMaxTokens( 32768 )
 					.usingFunctionDeclarations( ...AVAILABLE_TOOLS );
 
@@ -1259,7 +1256,6 @@ export function usePluginBuilder() {
 								.usingSystemInstruction(
 									getSystemPrompt( 'analyzer' )
 								)
-								.usingTemperature( 0.2 )
 								.usingMaxTokens( 8000 )
 								.asJsonResponse()
 								.generateText();
