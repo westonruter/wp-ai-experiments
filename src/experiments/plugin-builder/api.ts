@@ -3,6 +3,10 @@ import { __ } from '@wordpress/i18n';
 import JSZip from 'jszip';
 import { WriteResponse, GeneratedFile, ChatHistory } from './types';
 
+const coreAbilitiesReady = import(
+	/* webpackIgnore: true */ '@wordpress/core-abilities'
+).then( ( m: any ) => m.ready );
+
 declare global {
 	interface Window {
 		aiPluginBuilder: {
@@ -67,6 +71,7 @@ export async function executeAbility(
 	name: string,
 	input: any
 ): Promise< any > {
+	await coreAbilitiesReady;
 	const { executeAbility: execute } = await import(
 		/* webpackIgnore: true */ '@wordpress/abilities'
 	);
