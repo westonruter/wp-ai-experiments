@@ -757,7 +757,21 @@ export function usePluginBuilder() {
 							const args = call.args || {};
 							let res: any = null;
 
-							executedTools.push( fnName );
+							let toolLabel = fnName;
+							if (
+								fnName === 'execute_ability' &&
+								typeof args.name === 'string'
+							) {
+								toolLabel = `${ fnName }(${ args.name })`;
+							} else if (
+								( fnName === 'write_file' ||
+									fnName === 'read_file' ) &&
+								typeof args.path === 'string'
+							) {
+								toolLabel = `${ fnName }(${ args.path })`;
+							}
+
+							executedTools.push( toolLabel );
 							updateStep(
 								sprintf(
 									/* translators: 1: turn number, 2: tool name */
@@ -766,7 +780,7 @@ export function usePluginBuilder() {
 										'ai'
 									),
 									turnCount,
-									fnName
+									toolLabel
 								)
 							);
 
