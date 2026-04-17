@@ -156,7 +156,7 @@ class Get_Installed_Plugins extends Abstract_Ability {
 				'textdomain'   => $plugin_data['TextDomain'] ?? '',
 			);
 
-			$result[] = array_intersect_key( $plugin_info, array_flip( $requested_fields ) );
+			$result[ $plugin_file ] = array_intersect_key( $plugin_info, array_flip( $requested_fields ) );
 		}
 
 		foreach ( $mu_plugins as $mu_plugin_file => $mu_plugin_data ) {
@@ -175,7 +175,7 @@ class Get_Installed_Plugins extends Abstract_Ability {
 				'textdomain'   => $mu_plugin_data['TextDomain'] ?? '',
 			);
 
-			$result[] = array_intersect_key( $mu_plugin_info, array_flip( $requested_fields ) );
+			$result[ $mu_plugin_file ] = array_intersect_key( $mu_plugin_info, array_flip( $requested_fields ) );
 		}
 
 		return $result;
