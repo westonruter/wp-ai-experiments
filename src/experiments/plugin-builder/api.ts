@@ -75,7 +75,11 @@ export async function executeAbility(
 	const { executeAbility: execute } = await import(
 		/* webpackIgnore: true */ '@wordpress/abilities'
 	);
-	return execute( name, input ?? null );
+	// Some models pass `[]` to mean "no input"; coerce to an empty object so
+	// abilities whose input_schema requires `type: object` still validate.
+	const normalizedInput =
+		Array.isArray( input ) && input.length === 0 ? {} : input;
+	return execute( name, normalizedInput ?? null );
 }
 
 export async function discoverAbilities(): Promise< any > {
