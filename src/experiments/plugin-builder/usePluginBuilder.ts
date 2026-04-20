@@ -593,6 +593,7 @@ export function usePluginBuilder() {
 					'=== SETUP (do these first, before writing any code) ===',
 					'1. Call `discover_abilities` immediately to gain context on available WP features.',
 					'2. Call `execute_ability` with `ai/get-installed-plugins` to verify the planned slug is NOT already taken. If taken, pick a new descriptive slug prefixed with `apb-`.',
+					'3. When calling any ability, always read the ability\'s input schema first and pass the most specific input parameters available to filter results at the source. Never fetch broad datasets and filter them yourself — request only the data you actually need for the current task.',
 					'',
 					'=== FILE WRITING ===',
 					'Use the `write_file` tool to write every file.',
