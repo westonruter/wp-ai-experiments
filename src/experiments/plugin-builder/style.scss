@@ -126,7 +126,7 @@
 	height: 100%;
 	text-align: center;
 	color: var(--text-muted);
-	padding: 40px 20px;
+	padding: 20px;
 }
 
 .apb-chat__empty-icon {
@@ -830,6 +830,45 @@
 	visibility: visible;
 }
 
+.apb-chat__history-tooltip {
+	position: absolute;
+	top: calc(100% + 8px);
+	right: calc(100% + 8px);
+	left: auto;
+	width: 180px;
+	padding: 10px 12px;
+	font-size: 12px;
+	line-height: 1.5;
+	color: #fff;
+	background: #1f2937;
+	backdrop-filter: blur(8px);
+	border-radius: 6px;
+	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(0, 0, 0, 0.8);
+	opacity: 0;
+	visibility: hidden;
+	transition: opacity 0.2s ease, visibility 0.2s ease;
+	pointer-events: none;
+	z-index: 10000;
+	text-align: center;
+	white-space: nowrap;
+}
+
+.apb-chat__history-tooltip::after {
+	content: '';
+	position: absolute;
+	bottom: 50%;
+	left: 100%;
+	transform: translateY(50%);
+	border: 6px solid transparent;
+	border-left-color: #1f2937;
+	filter: drop-shadow(-2px 0 4px rgba(0, 0, 0, 0.3));
+}
+
+.history-toggle:hover .apb-chat__history-tooltip {
+	opacity: 1;
+	visibility: visible;
+}
+
 .apb-chat__send-btn.is-loading {
 	animation: apb-pulse 1.5s ease-in-out infinite;
 }
@@ -974,4 +1013,154 @@
 		opacity: 1;
 		transform: translateY(0);
 	}
+}
+
+.history-toggle {
+	position: absolute;
+	top: 12px;
+	right: 12px;
+	width: 42px;
+	height: 42px;
+	border-radius: 14px;
+	border: none;
+	cursor: pointer;
+	overflow: visible;
+
+	/* glassy background */
+	background: rgba(255, 255, 255, 0.7);
+	backdrop-filter: blur(10px);
+
+	/* soft shadow */
+	box-shadow: 
+		0 8px 24px rgba(0, 0, 0, 0.08),
+		inset 0 1px 0 rgba(255, 255, 255, 0.6);
+
+	display: flex;
+	align-items: center;
+	justify-content: center;
+
+	&:hover {
+		background: rgba(255, 255, 255, 0.9);
+		box-shadow: 
+			0 8px 32px rgba(0, 0, 0, 0.12),
+			inset 0 1px 0 rgba(255, 255, 255, 0.8);
+	}
+}
+
+.history-toggle__icon-wrapper {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 5px;
+}
+
+.history-toggle__tooltip {
+	position: absolute;
+	bottom: calc(100% + 12px);
+	left: 50%;
+	transform: translateX(-50%);
+	width: 160px;
+	padding: 8px 12px;
+	font-size: 12px;
+	line-height: 1.5;
+	color: #fff;
+	background: #1f2937;
+	backdrop-filter: blur(8px);
+	border-radius: 6px;
+	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(0, 0, 0, 0.8);
+	opacity: 0;
+	visibility: hidden;
+	transition: opacity 0.2s ease, visibility 0.2s ease;
+	pointer-events: none;
+	z-index: 10000;
+	text-align: center;
+	white-space: nowrap;
+}
+
+.history-toggle__tooltip::after {
+	content: '';
+	position: absolute;
+	top: 100%;
+	left: 50%;
+	transform: translateX(-50%);
+	border: 6px solid transparent;
+	border-top-color: #1f2937;
+	filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+}
+
+.history-toggle:hover .history-toggle__tooltip {
+	opacity: 1;
+	visibility: visible;
+}
+
+.history-toggle:hover {
+	box-shadow: 
+		0 12px 28px rgba(0, 0, 0, 0.12),
+		inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+.history-toggle:active {
+	transform: scale(0.96);
+}
+
+/* ICON */
+.history-toggle .icon {
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	gap: 6px;
+}
+
+/* ACTIVE → elegant X */
+.history-toggle.active span:nth-child(1) {
+	transform: translateY(8px) rotate(45deg);
+	width: 20px;
+}
+
+.history-toggle.active span:nth-child(2) {
+	opacity: 0;
+	transform: scaleX(0);
+}
+
+.history-toggle.active span:nth-child(3) {
+	transform: translateY(-8px) rotate(-45deg);
+	width: 20px;
+}
+
+.apb-chat__popup-overlay {
+	position: absolute;
+	top: 62px;
+	right: 0;
+	width: 550px;
+	max-height: 100vh;
+	background: #fff;
+	box-shadow: -2px 0 8px rgba(0, 0, 0, 0.15);
+	z-index: 1000;
+	display: flex;
+	flex-direction: column;
+	animation: slideInRight 0.3s ease-out;
+}
+
+@media (max-width: 600px) {
+  .apb-chat__history-list li {
+    flex-direction: column;   /* stack vertically */
+    align-items: stretch;     /* full width */
+  }
+
+  .apb-chat__history-btn {
+    width: 100%;
+  }
+
+  .button-link-delete {
+    align-self: flex-end;     /* keep delete button on the right */
+    margin-top: 4px;
+  }
+
+  .apb-chat__popup-overlay {
+    width: 100% !important;   /* full width on mobile */
+    right: 0 !important;
+    left: 0 !important;
+  }
 }
