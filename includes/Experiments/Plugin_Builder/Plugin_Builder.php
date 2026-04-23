@@ -11,7 +11,9 @@ namespace WordPress\AI\Experiments\Plugin_Builder;
 
 use WordPress\AI\Abilities\Plugin_Builder\Get_Active_Theme;
 use WordPress\AI\Abilities\Plugin_Builder\Get_Installed_Plugins;
+use WordPress\AI\Abilities\Plugin_Builder\Grep_Plugin_Theme_Files;
 use WordPress\AI\Abilities\Plugin_Builder\Plugin_Prompt_Enhancement;
+use WordPress\AI\Abilities\Plugin_Builder\Read_Plugin_Theme_File;
 use WordPress\AI\Abstracts\Abstract_Feature;
 use WordPress\AI\Experiments\Experiment_Category;
 use WordPress\AI\Experiments\Plugin_Builder\Rest\DownloadController;
@@ -189,6 +191,24 @@ class Plugin_Builder extends Abstract_Feature {
 				'label'         => __( 'Get the Active Theme', 'ai' ),
 				'description'   => __( 'Retrieves the active theme with its name and description. If it is a child theme, also returns the parent details.', 'ai' ),
 				'ability_class' => Get_Active_Theme::class,
+			),
+		);
+
+		wp_register_ability(
+			'ai/read-plugin-theme-file',
+			array(
+				'label'         => __( 'Read Plugin / Theme File', 'ai' ),
+				'description'   => __( 'Returns the raw text content of a single file inside a plugin or theme directory. Enforces an extension allowlist, a sensitive-file blocklist, path-confinement, and a 512 KB size cap.', 'ai' ),
+				'ability_class' => Read_Plugin_Theme_File::class,
+			),
+		);
+
+		wp_register_ability(
+			'ai/grep-plugin-theme-files',
+			array(
+				'label'         => __( 'Grep Plugin / Theme Files', 'ai' ),
+				'description'   => __( 'Searches for a plain string or PCRE pattern across all permitted files inside a plugin or theme directory. Returns matching lines with file path and line number, capped at 200 results across 500 files.', 'ai' ),
+				'ability_class' => Grep_Plugin_Theme_Files::class,
 			),
 		);
 	}
